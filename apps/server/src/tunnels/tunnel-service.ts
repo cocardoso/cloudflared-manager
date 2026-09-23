@@ -56,7 +56,7 @@ export class TunnelService {
   private async accountOf(id: string): Promise<AccountInfo> {
     const row = this.d.tunnels.get(id);
     const hint = row?.accountId ?? this.known.get(id);
-    if (hint) return this.d.accounts.get(hint);
+    if (hint) return this.d.accounts.getAny(hint);
     for (const a of await this.d.accounts.list()) {
       try {
         await this.d.api(a.id).getTunnel(id);
@@ -101,13 +101,17 @@ export class TunnelService {
   }
 
   async list(): Promise<TunnelList> {
-    const accounts = await this.d.accounts.list();
+    const [active, all] = await Promise.all([this.d.accounts.list(), this.d.accounts.listAll()]);
     const rows = new Map(this.d.tunnels.list().map((r) => [r.id, r]));
+    // Inactive accounts are still read for the tunnels that run on this host, so those never disappear.
+    const withRows = new Set([...rows.values()].map((r) => r.accountId));
+    const accounts = all.filter((a) => active.includes(a) || withRows.has(a.id));
     const unavailable = new Map<string, UnavailableAccount>();
     const listed = await Promise.all(
       accounts.map(async (a) => {
         try {
-          return { a, remote: await this.d.api(a.id).listTunnels() };
+          const remote = await this.d.api(a.id).listTunnels();
+          return { a, remote: active.includes(a) ? remote : remote.filter((t) => rows.has(t.id)) };
         } catch (e) {
           // One account the token cannot read must not hide the others.
           if (!(e instanceof AppError)) throw e;
@@ -328,9 +332,10 @@ export class TunnelService {
     };
     let { zoneOf, missing } = match(account.zones);
     if (missing.length) {
-      // The zone may have been added after the accounts were cached.
+      // The zone may have been added after the accounts were cached; a failed refresh keeps the first answer.
       this.d.accounts.invalidate();
-      ({ zoneOf, missing } = match((await this.d.accounts.get(account.id)).zones));
+      const fresh = await this.d.accounts.getAny(account.id).catch(() => null);
+      if (fresh) ({ zoneOf, missing } = match(fresh.zones));
     }
     if (missing.length) throw new AppError('ZONE_NOT_FOUND', "Hostname does not belong to a zone in this tunnel's account", 400, { hostnames: missing });
 

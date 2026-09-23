@@ -40,7 +40,13 @@ export class AccountDirectory {
       const entry = { token: c.token, at: this.now(), failed: false, value };
       this.cache = entry;
       value.then(
-        (l) => this.opts.onDiscovered?.(l),
+        (l) => {
+          try {
+            this.opts.onDiscovered?.(l);
+          } catch {
+            // Remembering names is best effort; discovery itself succeeded.
+          }
+        },
         () => {
           entry.failed = true;
           entry.at = this.now();
@@ -50,10 +56,18 @@ export class AccountDirectory {
     return this.cache!.value;
   }
 
-  /** The accounts the app works with. */
+  /** The accounts the app works with. If none of the chosen ones is reachable anymore, every account is. */
   async list(): Promise<AccountInfo[]> {
     const all = await this.listAll();
-    return this.opts.isEnabled ? all.filter((a) => this.opts.isEnabled!(a.id)) : all;
+    const active = this.opts.isEnabled ? all.filter((a) => this.opts.isEnabled!(a.id)) : all;
+    return active.length ? active : all;
+  }
+
+  /** Any reachable account, active or not: tunnels running here stay manageable when their account is turned off. */
+  async getAny(accountId: string): Promise<AccountInfo> {
+    const a = (await this.listAll()).find((x) => x.id === accountId);
+    if (!a) throw new AppError('ACCOUNT_NOT_FOUND', 'Account is not reachable with this token', 404, { accountId });
+    return a;
   }
 
   async get(accountId: string): Promise<AccountInfo> {

@@ -46,6 +46,29 @@ describe('SettingsPage', () => {
     await waitFor(() => expect(calls.find((c) => c.key === 'PUT /api/cloudflare/accounts')?.body).toEqual({ enabled: ['b'.repeat(32)] }));
     expect(await screen.findByText(/Tunnels of Home Lab run on this host/)).toBeTruthy();
   });
+  it('confirms when the accounts are saved', async () => {
+    let enabledSecond = false;
+    const status = () => ({
+      connected: true, tokenSuffix: 'abcd', lastAccountId: null,
+      accounts: [
+        { id: 'a'.repeat(32), name: 'Home Lab', enabled: true, zones: [] },
+        { id: 'b'.repeat(32), name: 'Second Org', enabled: enabledSecond, zones: [] },
+      ],
+    });
+    mockApi({
+      ...routes,
+      'GET /api/cloudflare/status': () => json(status()),
+      'PUT /api/cloudflare/accounts': () => {
+        enabledSecond = true;
+        return json(status());
+      },
+    });
+    renderWithProviders(<SettingsPage />);
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Second Org/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save accounts' }));
+    expect(await screen.findByText('Accounts saved')).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /Second Org/ }).getAttribute('aria-checked')).toBe('true'));
+  });
   it('updates cloudflared', async () => {
     const calls = mockApi(routes);
     renderWithProviders(<SettingsPage />);

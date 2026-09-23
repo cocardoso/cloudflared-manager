@@ -82,4 +82,8 @@ describe('AccountDirectory', () => {
     now = 10_001;
     expect(await d.list()).toHaveLength(1);
   });
+  it('survives a failing onDiscovered callback', async () => {
+    const d = new AccountDirectory(() => new CfClient({ token, baseUrl: cf.baseUrl }), { onDiscovered: () => { throw new Error('disk full'); } });
+    expect(await d.list()).toHaveLength(1);
+  });
 });

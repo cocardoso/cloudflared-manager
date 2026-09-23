@@ -173,6 +173,19 @@ describe('active accounts', () => {
     await connect(h);
     expect((await status(h)).accounts.map((a: { name: string; enabled: boolean }) => [a.name, a.enabled])).toEqual([['Home Lab', true], ['Second Org', false]]);
   });
+  it('keeps an active account that a replacement token temporarily does not reach', async () => {
+    const h = await setupAdmin();
+    cf.state.addSecondAccount();
+    await connect(h);
+    await put(h, [FAKE_ACCOUNT.id, SECOND_ACCOUNT.id]);
+    const saved = { accounts: [...cf.state.accounts], zones: [...cf.state.zones] };
+    cf.state.accounts = [FAKE_ACCOUNT];
+    cf.state.zones = cf.state.zones.filter((z) => z.account.id === FAKE_ACCOUNT.id);
+    await connect(h);
+    Object.assign(cf.state, saved);
+    await connect(h);
+    expect((await status(h)).accounts.map((a: { name: string; enabled: boolean }) => [a.name, a.enabled])).toEqual([['Home Lab', true], ['Second Org', true]]);
+  });
   it('resets the selection when a new token reaches none of the active accounts', async () => {
     const h = await setupAdmin();
     cf.state.addSecondAccount();

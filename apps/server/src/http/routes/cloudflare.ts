@@ -48,12 +48,10 @@ export async function cloudflareRoutes(app: FastifyInstance, ctx: AppContext) {
       throw new AppError('CF_PERMISSION_MISSING', 'Token cannot read any zone', 403, { permission: ZONE_PERMISSION });
     }
     ctx.settings.setCloudflare({ token });
-    // Keep the active accounts the new token still reaches; none left means all are active again.
+    // Keep the selection as is (an account out of reach now may come back with a later token);
+    // only when none of the chosen accounts is reachable does every account become active again.
     const previous = ctx.settings.enabledAccounts();
-    if (previous) {
-      const kept = previous.filter((id) => accounts.some((a) => a.id === id));
-      ctx.settings.setEnabledAccounts(kept.length ? kept : null);
-    }
+    if (previous && !previous.some((id) => accounts.some((a) => a.id === id))) ctx.settings.setEnabledAccounts(null);
     ctx.accounts.invalidate();
     return status();
   });

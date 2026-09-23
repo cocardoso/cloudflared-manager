@@ -349,3 +349,40 @@ describe('follow-ups', () => {
     expect(multi.events.list({ tunnelId: b.id, limit: 10 }).map((e) => e.message).join(' | ')).toContain('ha.second.net');
   });
 });
+
+describe('inactive accounts', () => {
+  let multi: Awaited<ReturnType<typeof makeTunnelEnv>>;
+  let enabled: string[] | null;
+  beforeEach(async () => {
+    enabled = null;
+    multi = await makeTunnelEnv({ second: true, isEnabled: (id) => !enabled || enabled.includes(id) });
+  });
+  afterEach(() => multi.cf.close());
+
+  it('keeps tunnels running here visible and manageable when their account is inactive', async () => {
+    const b = await multi.service.create('b', SECOND_ACCOUNT.id);
+    await multi.service.updateRoutes(b.id, upd(0, [route('ha.second.net')]));
+    enabled = [FAKE_ACCOUNT.id];
+    const list = await multi.service.list();
+    expect(list.unavailableAccounts).toEqual([]);
+    expect(list.tunnels.map((t) => [t.name, t.account.name])).toEqual([['b', 'Second Org']]);
+    expect((await multi.service.get(b.id)).routes.map((r) => r.hostname)).toEqual(['ha.second.net']);
+    await multi.service.delete(b.id);
+    expect(multi.cf.state.tunnels.get(b.id)!.tunnel.deleted_at).toBeTruthy();
+    expect(multi.cf.state.dns.get(SECOND_ZONE.id)).toEqual([]);
+  });
+  it('does not list unmanaged tunnels of inactive accounts', async () => {
+    await multi.api2.createTunnel('elsewhere');
+    enabled = [FAKE_ACCOUNT.id];
+    expect((await multi.service.list()).tunnels).toEqual([]);
+  });
+  it('treats every account as active when none of the active ones is reachable anymore', async () => {
+    enabled = ['c'.repeat(32)];
+    expect((await multi.accounts.list()).map((a) => a.name)).toEqual(['Home Lab', 'Second Org']);
+  });
+  it('answers ZONE_NOT_FOUND even if refreshing the accounts fails', async () => {
+    const b = await multi.service.create('b', SECOND_ACCOUNT.id);
+    multi.cf.state.failNext(/^\/zones$/, 429, [{ code: 971, message: 'Please wait' }]);
+    await expect(multi.service.updateRoutes(b.id, upd(0, [route('typo.nowhere.net')]))).rejects.toMatchObject({ code: 'ZONE_NOT_FOUND' });
+  });
+});

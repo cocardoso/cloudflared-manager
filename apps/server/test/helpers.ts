@@ -13,14 +13,14 @@ import { TunnelService } from '../src/tunnels/tunnel-service';
 import { FAKE_ACCOUNT, SECOND_ACCOUNT, startFakeCloudflare } from './fake-cloudflare';
 
 /** A TunnelService wired to a fake Cloudflare; `second` adds the "Second Org" account to the token. */
-export async function makeTunnelEnv(opts: { second?: boolean } = {}) {
+export async function makeTunnelEnv(opts: { second?: boolean; isEnabled?: (id: string) => boolean } = {}) {
   const cf = await startFakeCloudflare();
   if (opts.second) cf.state.addSecondAccount();
   const db = openDatabase(':memory:');
   const backend = new FakeBackend(mkdtempSync(join(tmpdir(), 'tm-')));
   const client = new CfClient({ token: cf.token, baseUrl: cf.baseUrl });
   const names: Record<string, string> = {};
-  const accounts = new AccountDirectory(() => client, { onDiscovered: (l) => l.forEach((a) => (names[a.id] = a.name)) });
+  const accounts = new AccountDirectory(() => client, { onDiscovered: (l) => l.forEach((a) => (names[a.id] = a.name)), isEnabled: opts.isEnabled });
   const apiFor = (accountId: string) => new CfApi(client, accountId);
   const repos = { tunnels: new TunnelRepo(db), dns: new DnsRepo(db), events: new EventRepo(db) };
   const used: string[] = [];
