@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 # Cloudflared Manager — Docker image (process backend: cloudflared runs as supervised child processes).
 
-FROM node:24-bookworm-slim AS build
+# The build output is plain JavaScript, so it is produced once on the runner's own architecture
+# instead of under emulation for every target platform.
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS build
 WORKDIR /src
 RUN corepack enable
 COPY . .
