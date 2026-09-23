@@ -11,7 +11,7 @@ FROM node:24-bookworm-slim
 ARG TARGETARCH
 ARG CLOUDFLARED_VERSION=2026.9.1
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl tini \
+ && apt-get install -y --no-install-recommends ca-certificates curl procps tini \
  && curl -fsSL -o /usr/local/bin/cloudflared \
       "https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-${TARGETARCH}" \
  && chmod 0755 /usr/local/bin/cloudflared \

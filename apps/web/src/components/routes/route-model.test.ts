@@ -29,6 +29,10 @@ describe('route model', () => {
   it('strips a scheme typed into the URL field', () => {
     expect(formToRoute({ ...emptyForm('example.com'), subdomain: 'a', type: 'http', target: 'http://10.0.0.1:80' }).service).toBe('http://10.0.0.1:80');
   });
+  it('keeps single-label hosts such as Docker service names', () => {
+    expect(formToRoute({ ...emptyForm('example.com'), subdomain: 'a', type: 'http', target: 'origin:80' }).service).toBe('http://origin:80');
+    expect(formToRoute({ ...emptyForm('example.com'), subdomain: 'a', type: 'http', target: 'homeassistant:8123' }).service).toBe('http://homeassistant:8123');
+  });
   it('rejects invalid input', () => {
     expect(() => formToRoute({ ...emptyForm('example.com'), subdomain: 'bad host', target: 'x:1' })).toThrow();
     expect(() => formToRoute({ ...emptyForm('example.com'), subdomain: 'a', target: '' })).toThrow();

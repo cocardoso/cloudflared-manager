@@ -56,7 +56,8 @@ export function hostnameOf(v: Pick<RouteFormValues, 'subdomain' | 'zone'>) {
  * When editing, origin options the form does not manage are carried over from `original`.
  */
 export function formToRoute(v: RouteFormValues, original?: Route | null): Route {
-  const target = v.target.trim().replace(/^[a-z_]+:(\/\/)?/i, '');
+  // Strip only a scheme the user typed ("http://…", "unix:…"); "origin:80" is a host and port.
+  const target = v.target.trim().replace(/^(?:(?:https?|tcp|ssh|rdp|smb|unix\+tls):\/\/|unix:|http_status:)/i, '');
   if (!target) throw new Error('missing target');
   const service = v.type === 'unix' ? `unix:${target}` : v.type === 'http_status' ? `http_status:${target}` : `${v.type}://${target}`;
   const preserved = Object.fromEntries(Object.entries(original?.originRequest ?? {}).filter(([k]) => !FORM_KEYS.includes(k)));
