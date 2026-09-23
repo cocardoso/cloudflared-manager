@@ -1,3 +1,4 @@
+import { AppError } from '../errors';
 import type { CfClient } from './client';
 import type { CfAccount, CfDnsRecord, CfTunnel, CfTunnelConfig, CfZone } from './types';
 
@@ -36,8 +37,11 @@ export class CfApi {
     return this.c.paginate<CfTunnel>(`${this.t}?is_deleted=false&per_page=100`);
   }
 
-  getTunnel(id: string) {
-    return this.c.request<CfTunnel>('GET', `${this.t}/${id}`);
+  /** The API still returns deleted tunnels by id (with deleted_at); treat them as gone. */
+  async getTunnel(id: string) {
+    const t = await this.c.request<CfTunnel>('GET', `${this.t}/${id}`);
+    if (t.deleted_at) throw new AppError('TUNNEL_NOT_FOUND', 'Tunnel was deleted', 404);
+    return t;
   }
 
   createTunnel(name: string) {

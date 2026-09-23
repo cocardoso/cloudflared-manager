@@ -74,9 +74,11 @@ export async function startFakeCloudflare(opts: { port?: number } = {}) {
     state.tunnels.set(id, { tunnel, config: { ingress: [{ service: 'http_status:404' }] }, version: 0, token: `tok-${id}` });
     return ok(tunnel);
   });
+  // Like the real API, a deleted tunnel is still returned by id, with deleted_at set.
   app.get('/accounts/:a/cfd_tunnel/:id', async (req, reply) => {
-    const e = entry(idOf(req.params), reply);
-    return e && ok(e.tunnel);
+    const e = state.tunnels.get(idOf(req.params));
+    if (!e) return fail(reply, 404, [{ code: 1003, message: 'Tunnel not found' }]);
+    return ok(e.tunnel);
   });
   app.patch('/accounts/:a/cfd_tunnel/:id', async (req, reply) => {
     const e = entry(idOf(req.params), reply);
@@ -103,8 +105,9 @@ export async function startFakeCloudflare(opts: { port?: number } = {}) {
     return e && ok(e.token);
   });
   app.get('/accounts/:a/cfd_tunnel/:id/configurations', async (req, reply) => {
-    const e = entry(idOf(req.params), reply);
-    return e && ok({ tunnel_id: e.tunnel.id, version: e.version, config: e.config, source: 'cloudflare' });
+    const e = state.tunnels.get(idOf(req.params));
+    if (!e) return fail(reply, 404, [{ code: 1003, message: 'Tunnel not found' }]);
+    return ok({ tunnel_id: e.tunnel.id, version: e.version, config: e.config, source: 'cloudflare' });
   });
   app.put('/accounts/:a/cfd_tunnel/:id/configurations', async (req, reply) => {
     const e = entry(idOf(req.params), reply);
