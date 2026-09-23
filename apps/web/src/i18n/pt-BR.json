@@ -1,0 +1,109 @@
+{
+  "app": { "name": "Cloudflared Manager", "tagline": "Túneis para o seu homelab" },
+  "nav": { "dashboard": "Painel", "tunnels": "Túneis", "settings": "Configurações", "logout": "Sair", "language": "Idioma", "collapse": "Recolher menu" },
+  "common": {
+    "save": "Salvar", "cancel": "Cancelar", "delete": "Excluir", "edit": "Editar", "add": "Adicionar", "close": "Fechar", "confirm": "Confirmar",
+    "loading": "Carregando…", "retry": "Tentar de novo", "copy": "Copiar", "copied": "Copiado", "yes": "Sim", "no": "Não", "back": "Voltar", "next": "Próximo",
+    "never": "nunca", "unknown": "desconhecido", "optional": "opcional", "advanced": "Opções avançadas", "actions": "Ações", "saved": "Salvo"
+  },
+  "status": {
+    "local": { "active": "Rodando", "inactive": "Parado", "failed": "Falhou", "activating": "Iniciando", "not-installed": "Fora deste host" },
+    "edge": { "healthy": "Saudável", "degraded": "Degradado", "down": "Fora do ar", "inactive": "Inativo" },
+    "watchdog": { "healthy": "Keep-alive ligado", "degraded": "Degradado", "restarting": "Reiniciando", "failing": "Desistiu", "disabled": "Keep-alive desligado" }
+  },
+  "errors": {
+    "CF_UNREACHABLE": "A Cloudflare está inacessível. Verifique a conexão deste host com a internet.",
+    "CF_TOKEN_INVALID": "O token da Cloudflare é inválido ou foi revogado. Conecte novamente em Configurações.",
+    "CF_PERMISSION_MISSING": "Falta uma permissão no token: {{permission}}. Crie um novo token com as permissões necessárias.",
+    "CF_RATE_LIMITED": "Limite de requisições da Cloudflare atingido. Aguarde um minuto e tente de novo.",
+    "CF_API_ERROR": "A Cloudflare retornou um erro.",
+    "CF_NOT_CONNECTED": "Conecte sua conta da Cloudflare primeiro.",
+    "ACCOUNT_SELECTION_REQUIRED": "Este token tem acesso a várias contas. Escolha uma.",
+    "DNS_CONFLICT": "Já existe um registro DNS para este hostname.",
+    "ZONE_NOT_FOUND": "Este hostname não pertence a nenhum domínio da sua conta Cloudflare.",
+    "CONFIG_VERSION_CONFLICT": "As rotas foram alteradas em outro lugar (ex.: no painel da Cloudflare). Recarregue e tente de novo.",
+    "TUNNEL_NOT_FOUND": "Túnel não encontrado.",
+    "TUNNEL_NOT_MANAGED": "Este túnel não roda neste host. Execute-o aqui primeiro.",
+    "TUNNEL_NOT_REMOTE": "Este túnel usa um arquivo de configuração local e não pode ser gerenciado aqui.",
+    "SERVICE_COMMAND_FAILED": "Um comando do sistema falhou. Verifique os logs.",
+    "VALIDATION_ERROR": "Alguns campos são inválidos.",
+    "UNAUTHORIZED": "Sua sessão expirou. Entre novamente.",
+    "SETUP_ALREADY_DONE": "A configuração inicial já foi feita.",
+    "INVALID_CREDENTIALS": "Usuário ou senha incorretos.",
+    "RATE_LIMITED": "Muitas tentativas. Aguarde um minuto.",
+    "INTERNAL": "Erro inesperado."
+  },
+  "setup": {
+    "title": "Boas-vindas", "subtitle": "Dois passos rápidos e seus túneis passam a cuidar de si mesmos.",
+    "step1": "Criar administrador", "step2": "Conectar à Cloudflare",
+    "username": "Usuário", "password": "Senha", "passwordHint": "Pelo menos 12 caracteres", "confirmPassword": "Confirmar senha",
+    "passwordMismatch": "As senhas não coincidem", "createAdmin": "Criar administrador",
+    "tokenIntro": "Crie um token de API na Cloudflare com as permissões abaixo e cole aqui. Isso é feito uma única vez.",
+    "createToken": "Criar token na Cloudflare", "permissions": "Permissões necessárias",
+    "permTunnel": "Conta → Cloudflare Tunnel → Editar", "permDns": "Zona → DNS → Editar", "permZone": "Zona → Zona → Ler",
+    "allZones": "Recursos de zona: Todas as zonas", "token": "Token de API", "connect": "Conectar", "chooseAccount": "Conta",
+    "connected": "Conectado a {{account}}", "zonesFound_one": "{{count}} domínio encontrado", "zonesFound_other": "{{count}} domínios encontrados", "finish": "Ir para o painel"
+  },
+  "login": { "title": "Entrar", "subtitle": "Gerencie os túneis que rodam neste host.", "submit": "Entrar" },
+  "dashboard": {
+    "title": "Túneis", "subtitle": "Os túneis que rodam neste host se mantêm conectados, mesmo com esta página fechada.",
+    "create": "Criar túnel", "healthy": "Saudáveis", "degraded": "Degradados", "stopped": "Parados", "failing": "Precisam de atenção",
+    "routes": "Rotas", "recentEvents": "Eventos recentes", "noEvents": "Nenhum evento ainda",
+    "emptyTitle": "Nenhum túnel ainda", "emptyDescription": "Crie seu primeiro túnel para expor um serviço do seu homelab.",
+    "name": "Nome", "status": "Status", "connections": "Conexões", "uptime": "Tempo no ar", "keepAlive": "Keep-alive",
+    "notHere": "Fora deste host", "adopt": "Executar aqui", "createTitle": "Criar túnel", "createName": "Nome do túnel",
+    "createNameHint": "Letras, números, pontos, hífens e sublinhados.", "created": "Túnel criado", "adopted": "O túnel agora roda aqui",
+    "otherTunnels": "Outros túneis da sua conta"
+  },
+  "tunnel": {
+    "tabs": { "routes": "Hostnames públicos", "status": "Status", "logs": "Logs", "events": "Eventos", "settings": "Configurações" },
+    "start": "Iniciar", "stop": "Parar", "restart": "Reiniciar", "started": "Túnel iniciado", "stopped": "Túnel parado", "restarted": "Túnel reiniciado",
+    "deleteTitle": "Excluir {{name}}", "deleted": "Túnel excluído",
+    "deleteDescription": "Isso remove o túnel da Cloudflare, seus hostnames públicos, os registros DNS criados aqui e o serviço local. Não pode ser desfeito.",
+    "deleteConfirm": "Digite {{name}} para confirmar", "deleteButton": "Excluir túnel",
+    "connectionsTitle": "Conexões com a borda", "noConnections": "Nenhuma conexão ativa",
+    "colo": "Data center", "openedAt": "Conectado desde", "originIp": "IP de origem", "clientVersion": "Versão",
+    "traffic": "Tráfego", "version": "Versão do cloudflared", "requests": "Requisições / min", "errors": "Erros / min",
+    "metricsEmpty": "As métricas aparecem após alguns minutos.",
+    "logsPaused": "Pausado", "pause": "Pausar", "resume": "Retomar", "clear": "Limpar", "level": "Nível", "allLevels": "Todos os níveis",
+    "noLogs": "Nenhuma linha de log ainda", "live": "Ao vivo", "disconnected": "Desconectado",
+    "keepAlive": "Keep-alive", "keepAliveHint": "Reinicia o túnel automaticamente quando ele fica indisponível.",
+    "tolerance": "Tolerância (minutos)", "toleranceHint": "Quanto tempo o túnel pode ficar indisponível antes de reiniciar.",
+    "logLevel": "Nível de log", "protocol": "Protocolo", "rename": "Nome", "dangerZone": "Zona de perigo", "general": "Geral",
+    "dangerHint": "Excluir remove o túnel de todos os lugares.",
+    "failingBanner": "O watchdog desistiu após várias tentativas de reinício. Verifique os logs e inicie o túnel novamente.",
+    "ghost": "Este túnel foi excluído na Cloudflare. Exclua-o aqui para limpar.",
+    "notHereBanner": "Este túnel existe na sua conta, mas não roda neste host.",
+    "localConfigBanner": "Este túnel usa um arquivo de configuração local e só pode ser visualizado.",
+    "tunnelId": "ID do túnel", "metricsPort": "Porta de métricas"
+  },
+  "routes": {
+    "empty": "Nenhum hostname público ainda", "emptyHint": "Publique um serviço da sua rede em um dos seus domínios.",
+    "add": "Adicionar hostname público", "editTitle": "Editar hostname público", "addTitle": "Adicionar hostname público",
+    "subdomain": "Subdomínio", "domain": "Domínio", "path": "Caminho", "service": "Serviço", "type": "Tipo", "url": "URL",
+    "hostname": "Hostname", "catchAll": "Todo o resto retorna 404", "moveUp": "Mover para cima", "moveDown": "Mover para baixo",
+    "testOrigin": "Testar origem", "reachable": "Alcançável em {{ms}} ms", "unreachable": "Inalcançável: {{error}}",
+    "noTLSVerify": "Ignorar verificação TLS", "httpHostHeader": "Cabeçalho HTTP Host", "originServerName": "Nome do servidor de origem",
+    "connectTimeout": "Timeout de conexão", "keepAliveTimeout": "Timeout de keep-alive", "durationHint": "ex.: 30s, 2m",
+    "conflictTitle": "O registro DNS já existe",
+    "conflictDescription": "{{hostnames}} já apontam para outro destino. Substituir por um registro apontando para este túnel?",
+    "overwrite": "Substituir registro DNS", "removeTitle": "Remover {{hostname}}", "removeDns": "Excluir também o registro DNS",
+    "removeDescription": "O tráfego para este hostname deixará de chegar ao seu serviço.",
+    "saved": "Hostnames públicos salvos", "reload": "Recarregar", "preview": "Será publicado em", "remove": "Remover",
+    "urlPlaceholder": "192.168.1.10:8123", "pathPlaceholder": "^/api", "invalid": "Verifique o hostname e a URL do serviço."
+  },
+  "settings": {
+    "title": "Configurações", "subtitle": "Conta, segurança e manutenção.",
+    "account": "Conta Cloudflare", "tokenEnding": "Token terminado em {{suffix}}", "replaceToken": "Trocar token", "domains": "Domínios",
+    "password": "Senha do administrador", "currentPassword": "Senha atual", "newPassword": "Nova senha", "changePassword": "Trocar senha",
+    "passwordChanged": "Senha alterada", "appearance": "Aparência", "theme": "Tema", "themeLight": "Claro", "themeDark": "Escuro", "themeSystem": "Sistema",
+    "cloudflared": "cloudflared", "installed": "Instalado", "latest": "Mais recente", "update": "Atualizar", "upToDate": "Atualizado",
+    "updated": "cloudflared atualizado", "backup": "Backup", "export": "Exportar", "import": "Importar", "imported": "Backup importado",
+    "backupHint": "Contém as configurações dos túneis e a posse dos registros DNS. O token da Cloudflare nunca é exportado."
+  },
+  "events": {
+    "created": "Criado", "deleted": "Excluído", "adopted": "Passou a rodar aqui", "started": "Iniciado", "stopped": "Parado", "restarted": "Reiniciado",
+    "config-changed": "Configuração alterada", "watchdog-degraded": "Indisponível", "watchdog-restart": "Reinício automático",
+    "watchdog-recovered": "Recuperado", "watchdog-failing": "Watchdog desistiu", "no-connectivity": "Sem internet", "cloudflared-updated": "cloudflared atualizado"
+  }
+}
