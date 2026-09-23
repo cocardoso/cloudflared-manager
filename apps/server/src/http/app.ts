@@ -16,7 +16,8 @@ import { SESSION_COOKIE } from './session-cookie';
 const PUBLIC = new Set(['/api/health', '/api/setup/status', '/api/setup/admin', '/api/auth/login']);
 
 export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
-  const app = Fastify({ logger: process.env.NODE_ENV === 'production' ? { level: 'info' } : false, disableRequestLogging: true });
+  // Warn level keeps per-request lines out of the journal.
+  const app = Fastify({ logger: process.env.NODE_ENV === 'production' ? { level: 'warn' } : false });
   await app.register(cookie);
   await app.register(rateLimit, { global: false });
 

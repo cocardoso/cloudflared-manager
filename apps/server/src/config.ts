@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 export interface AppConfig {
   port: number;
@@ -15,10 +15,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return {
     port: Number(env.PORT ?? 8080),
     host: env.HOST ?? '0.0.0.0',
-    dataDir: env.DATA_DIR ?? '/var/lib/tunnel-manager',
-    etcDir: env.ETC_DIR ?? '/etc/tunnel-manager',
+    dataDir: resolve(env.DATA_DIR ?? '/var/lib/tunnel-manager'),
+    etcDir: resolve(env.ETC_DIR ?? '/etc/tunnel-manager'),
     serviceBackend: env.SERVICE_BACKEND === 'fake' ? 'fake' : 'systemd',
-    webDist: env.WEB_DIST ?? (env.NODE_ENV === 'production' ? join(import.meta.dirname, 'web') : null),
+    webDist: env.WEB_DIST ? resolve(env.WEB_DIST) : env.NODE_ENV === 'production' ? join(import.meta.dirname, 'web') : null,
     cfApiBase: env.CF_API_BASE ?? 'https://api.cloudflare.com/client/v4',
     cookieSecure: env.COOKIE_SECURE === 'true',
   };
