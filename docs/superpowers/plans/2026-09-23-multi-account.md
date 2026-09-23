@@ -17,7 +17,7 @@
 - Accounts are cached for 60 s; account listings run in parallel.
 - A hostname must belong to a zone of the tunnel's account (`ZONE_NOT_FOUND` otherwise).
 - Installations configured with one account keep working after upgrade without any user action.
-- Commits end with `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`.
+- Commits carry no co-author trailer.
 
 ## Review Focus
 

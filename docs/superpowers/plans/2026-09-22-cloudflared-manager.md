@@ -25,7 +25,7 @@
 ## Global Constraints
 
 - Language: code, comments, file names, commits and strings in **English**; `.md` files in **pt-BR**. UI messages via i18n `en` + `pt-BR`.
-- Commits end with `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`.
+- Commits carry no co-author trailer.
 - Tunnels are always created with `config_src: "cloudflare"`.
 - Token permissions: Account → Cloudflare Tunnel → Edit; Zone → DNS → Edit; Zone → Zone → Read; all zones.
 - Cloudflare token encrypted with AES-256-GCM; key at `${ETC_DIR}/secret.key` (32 bytes, mode 0600); never returned to the UI (only the last 4 characters).
