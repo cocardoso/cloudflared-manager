@@ -6,7 +6,8 @@
 GH_REPO="${TM_GH_REPO:-cocardoso/cloudflared-proxmox}"
 # The community-scripts engine is pinned so upstream changes cannot break this script.
 CORE_COMMIT="${TM_CORE_COMMIT:-34c3105f51f7d24505a7b4801babbf2aa7bca407}"
-export _CS_DEFAULT_URL="https://raw.githubusercontent.com/${GH_REPO}/main"
+# The engine resolves install/<app>-install.sh relative to this URL, i.e. proxmox/install/.
+export _CS_DEFAULT_URL="https://raw.githubusercontent.com/${GH_REPO}/main/proxmox"
 export COMMUNITY_SCRIPTS_URL="${_CS_DEFAULT_URL}"
 export COMMUNITY_SCRIPTS_CORE_URL="https://raw.githubusercontent.com/community-scripts/core/${CORE_COMMIT}"
 source <(curl -fsSL "${COMMUNITY_SCRIPTS_CORE_URL}/core/build.func")
