@@ -151,4 +151,26 @@ describe('ProcessBackend', () => {
     expect(b.canSelfUpdate).toBe(false);
     await expect(b.upgradeCloudflared()).rejects.toMatchObject({ code: 'CLOUDFLARED_UPDATE_UNSUPPORTED' });
   });
+
+  it('a stop issued while a restart is in progress wins', async () => {
+    const { b, dir } = make({ flags: 'FAKE_CF_IGNORE_TERM=1' });
+    await b.install(ID, env);
+    await b.start(ID);
+    await until(async () => (await text(b)).includes('Starting tunnel'));
+    const restarting = b.restart(ID); // waits for the grace period before starting again
+    await sleep(20);
+    await b.stop(ID);
+    await restarting;
+    await sleep(150);
+    expect((await b.status(ID)).state).toBe('inactive');
+    expect(existsSync(join(dir, 'etc', 'tunnels', `${ID}.stopped`))).toBe(true);
+  });
+
+  it('boots the valid tunnels even when an entry is broken', async () => {
+    const { b, dir } = make();
+    await b.install(ID, env);
+    writeFileSync(join(dir, 'etc', 'tunnels', 'not-a-uuid.env'), 'TUNNEL_TOKEN=x\n');
+    await expect(b.startAll()).resolves.toBeUndefined();
+    await until(async () => (await b.status(ID)).state === 'active');
+  });
 });

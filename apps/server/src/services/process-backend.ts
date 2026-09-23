@@ -18,6 +18,8 @@ interface Tunnel {
   /** True while the tunnel should be running; false after stop() or during shutdown. */
   wanted: boolean;
   timer: NodeJS.Timeout | null;
+  /** Bumped by stop()/uninstall() so an in-flight restart() knows it was overridden. */
+  generation: number;
   lines: LogLine[];
   listeners: Set<(l: LogLine) => void>;
 }
@@ -54,7 +56,7 @@ export class ProcessBackend implements ServiceBackend {
   private entry(id: string): Tunnel {
     let t = this.tunnels.get(id);
     if (!t) {
-      t = { proc: null, state: 'inactive', since: null, restarts: 0, wanted: false, timer: null, lines: [], listeners: new Set() };
+      t = { proc: null, state: 'inactive', since: null, restarts: 0, wanted: false, timer: null, generation: 0, lines: [], listeners: new Set() };
       this.tunnels.set(id, t);
     }
     return t;
@@ -86,9 +88,20 @@ export class ProcessBackend implements ServiceBackend {
     const t = this.entry(id);
     t.timer = null;
     if (!t.wanted || t.proc) return;
+    let vars: Record<string, string>;
+    try {
+      vars = readEnvVars(envFilePath(this.opts.etcDir, id));
+    } catch (e) {
+      // An unreadable env file must not crash the app; retry like any other failure.
+      this.push(t, `${new Date().toISOString()} ERR cannot read tunnel settings: ${(e as Error).message}`);
+      t.state = 'failed';
+      t.restarts++;
+      t.timer = setTimeout(() => this.spawnChild(id), this.restartDelayMs);
+      return;
+    }
     const proc = spawn(this.bin, ['--no-autoupdate', 'tunnel', 'run'], {
       // The token travels in the environment only, so it never shows up in `ps`.
-      env: { ...process.env, ...readEnvVars(envFilePath(this.opts.etcDir, id)) },
+      env: { ...process.env, ...vars },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     t.proc = proc;
@@ -145,6 +158,7 @@ export class ProcessBackend implements ServiceBackend {
     const t = this.tunnels.get(id);
     if (t) {
       t.wanted = false;
+      t.generation++;
       await this.terminate(t);
       this.tunnels.delete(id);
     }
@@ -168,14 +182,18 @@ export class ProcessBackend implements ServiceBackend {
     if (this.isInstalled(id)) writeFileSync(this.markerPath(id), '');
     const t = this.entry(id);
     t.wanted = false;
+    t.generation++;
     await this.terminate(t);
     t.state = 'inactive';
   }
 
   async restart(id: string) {
     const t = this.entry(id);
+    const generation = t.generation;
     t.wanted = false;
     await this.terminate(t);
+    // A stop() or uninstall() that arrived while we were terminating wins.
+    if (t.generation !== generation) return;
     await this.start(id);
   }
 
@@ -203,8 +221,14 @@ export class ProcessBackend implements ServiceBackend {
     const dir = join(this.opts.etcDir, 'tunnels');
     if (!existsSync(dir)) return;
     for (const f of readdirSync(dir)) {
+      if (!f.endsWith('.env')) continue;
       const id = f.replace(/\.env$/, '');
-      if (f.endsWith('.env') && !existsSync(this.markerPath(id))) await this.start(id);
+      // One broken entry must not keep the others (or the whole app) from starting.
+      try {
+        if (!existsSync(this.markerPath(id))) await this.start(id);
+      } catch (e) {
+        console.error(`cloudflared-manager: skipping ${f}: ${(e as Error).message}`);
+      }
     }
   }
 
