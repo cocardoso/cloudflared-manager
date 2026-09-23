@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 export type Db = DatabaseSync;
 
-const MIGRATIONS: string[] = [
+export const MIGRATIONS: string[] = [
   `
   create table admin (id integer primary key check (id = 1), username text not null, password_hash text not null);
   create table sessions (token_hash text primary key, expires_at integer not null);
@@ -26,6 +26,11 @@ const MIGRATIONS: string[] = [
     id integer primary key autoincrement, tunnel_id text, type text not null, message text not null, created_at integer not null
   );
   create index events_tunnel on events(tunnel_id, created_at);
+  `,
+  // Multiple accounts: each local tunnel records its account; single-account installs keep the one they chose.
+  `
+  alter table tunnels add column account_id text;
+  update tunnels set account_id = (select value from settings where key = 'cf_account_id');
   `,
 ];
 

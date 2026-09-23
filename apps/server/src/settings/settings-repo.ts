@@ -1,7 +1,7 @@
 import { decrypt, encrypt } from '../crypto/secret-box';
 import type { Db } from '../db/database';
 
-export interface CloudflareCredentials { token: string; accountId: string; accountName: string }
+export interface CloudflareCredentials { token: string }
 
 export class SettingsRepo {
   constructor(private db: Db, private key: Buffer) {}
@@ -20,15 +20,20 @@ export class SettingsRepo {
   setCloudflare(c: CloudflareCredentials) {
     this.set('cf_token', encrypt(this.key, c.token));
     this.set('cf_token_suffix', c.token.slice(-4));
-    this.set('cf_account_id', c.accountId);
-    this.set('cf_account_name', c.accountName);
   }
 
+  /** Connected means a token is stored; the accounts are whatever that token reaches. */
   getCloudflare(): CloudflareCredentials | null {
     const t = this.get('cf_token');
-    const a = this.get('cf_account_id');
-    if (!t || !a) return null;
-    return { token: decrypt(this.key, t), accountId: a, accountName: this.get('cf_account_name') ?? '' };
+    return t ? { token: decrypt(this.key, t) } : null;
+  }
+
+  lastAccountId() {
+    return this.get('last_account_id');
+  }
+
+  setLastAccountId(id: string) {
+    this.set('last_account_id', id);
   }
 
   tokenSuffix() {
