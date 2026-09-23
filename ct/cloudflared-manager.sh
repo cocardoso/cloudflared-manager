@@ -46,7 +46,13 @@ function update_script() {
     TMP=$(mktemp -d)
     curl -fsSL "https://github.com/${GH_REPO}/releases/download/${RELEASE}/cloudflared-manager-${RELEASE}.tar.gz" -o "$TMP/app.tar.gz"
     mkdir -p "$TMP/new"
-    tar -xzf "$TMP/app.tar.gz" -C "$TMP/new" --strip-components=1
+    tar --no-same-owner -xzf "$TMP/app.tar.gz" -C "$TMP/new" --strip-components=1
+    chown -R root:root "$TMP/new"
+    if ! visudo -cf "$TMP/new/deploy/sudoers" >/dev/null; then
+      msg_error "Invalid sudoers file in release ${RELEASE}; update aborted"
+      rm -rf "$TMP"
+      exit 1
+    fi
     echo "$RELEASE" >"$TMP/new/VERSION"
     rm -rf /opt/tunnel-manager.old
     mv /opt/tunnel-manager /opt/tunnel-manager.old

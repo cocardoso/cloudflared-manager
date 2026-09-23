@@ -44,12 +44,13 @@ RELEASE=$(curl -fsSL "https://api.github.com/repos/${GH_REPO}/releases/latest" |
 TMP=$(mktemp -d)
 curl -fsSL "https://github.com/${GH_REPO}/releases/download/${RELEASE}/cloudflared-manager-${RELEASE}.tar.gz" -o "$TMP/app.tar.gz"
 mkdir -p /opt/tunnel-manager
-tar -xzf "$TMP/app.tar.gz" -C /opt/tunnel-manager --strip-components=1
+tar --no-same-owner -xzf "$TMP/app.tar.gz" -C /opt/tunnel-manager --strip-components=1
+chown -R root:root /opt/tunnel-manager
 echo "$RELEASE" >/opt/tunnel-manager/VERSION
 install -m 0644 /opt/tunnel-manager/deploy/cloudflared@.service /etc/systemd/system/cloudflared@.service
 install -m 0644 /opt/tunnel-manager/deploy/tunnel-manager.service /etc/systemd/system/tunnel-manager.service
+visudo -cf /opt/tunnel-manager/deploy/sudoers >/dev/null
 install -m 0440 /opt/tunnel-manager/deploy/sudoers /etc/sudoers.d/tunnel-manager
-visudo -cf /etc/sudoers.d/tunnel-manager >/dev/null
 rm -rf "$TMP"
 systemctl daemon-reload
 systemctl enable -q --now tunnel-manager
