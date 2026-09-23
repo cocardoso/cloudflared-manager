@@ -19,6 +19,8 @@ interface Deps {
   events: EventRepo;
   /** Called with the account of each tunnel created here. */
   onAccountUsed?: (accountId: string) => void;
+  /** Last known name of an account, for accounts the token no longer reaches. */
+  accountName?: (accountId: string) => string | undefined;
 }
 
 const ignore = (...codes: string[]) => (e: unknown) => {
@@ -133,8 +135,9 @@ export class TunnelService {
       if (a && unavailable.has(a.id)) continue; // unknown right now, not deleted
       if (!a && row.accountId) {
         // The token no longer reaches this tunnel's account: keep it visible so it can still be stopped or removed.
-        unavailable.set(row.accountId, { id: row.accountId, name: row.accountId, code: 'ACCOUNT_NOT_FOUND' });
-        out.push(await this.summarize(this.ghost(row, UNREACHABLE), row, 0, { id: row.accountId, name: row.accountId }));
+        const lost = this.lostAccount(row.accountId);
+        unavailable.set(row.accountId, { ...lost, code: 'ACCOUNT_NOT_FOUND' });
+        out.push(await this.summarize(this.ghost(row, UNREACHABLE), row, 0, lost));
         continue;
       }
       out.push(await this.summarize(this.ghost(row), row, 0, a ? ref(a) : { id: '', name: '' }));
@@ -143,6 +146,10 @@ export class TunnelService {
       tunnels: out.sort((a, b) => Number(b.managedHere) - Number(a.managedHere) || a.name.localeCompare(b.name)),
       unavailableAccounts: [...unavailable.values()],
     };
+  }
+
+  private lostAccount(id: string): AccountRef {
+    return { id, name: this.d.accountName?.(id) ?? id };
   }
 
   private async routeCount(accountId: string, id: string) {
@@ -162,7 +169,7 @@ export class TunnelService {
       account = await this.accountOf(id);
     } catch (e) {
       if (row && isCode(e, 'TUNNEL_NOT_FOUND')) return ghost({ id: '', name: '' });
-      if (row?.accountId && isCode(e, 'ACCOUNT_NOT_FOUND')) return ghost({ id: row.accountId, name: row.accountId }, UNREACHABLE);
+      if (row?.accountId && isCode(e, 'ACCOUNT_NOT_FOUND')) return ghost(this.lostAccount(row.accountId), UNREACHABLE);
       throw e;
     }
     const api = this.d.api(account.id);
@@ -276,11 +283,16 @@ export class TunnelService {
     const api = this.d.api(account?.id ?? accounts[0]?.id ?? '');
     if (this.d.backend.isInstalled(id)) await this.d.backend.uninstall(id);
     if (account) await api.cleanupConnections(id).catch(ignore('TUNNEL_NOT_FOUND', 'CF_API_ERROR'));
-    const zones = new Set(accounts.flatMap((a) => a.zones.map((z) => z.id)));
+    const zones = new Set((await this.d.accounts.listAll()).flatMap((a) => a.zones.map((z) => z.id)));
+    const leftBehind: string[] = [];
     for (const m of this.d.dns.byTunnel(id)) {
       // Any failure other than "already gone" aborts, leaving the tunnel in place so the delete can be retried.
       if (zones.has(m.zoneId)) await api.deleteDnsRecord(m.zoneId, m.recordId).catch(ignore('DNS_RECORD_NOT_FOUND'));
+      else leftBehind.push(m.hostname);
       this.d.dns.delete(m.recordId);
+    }
+    if (leftBehind.length) {
+      this.d.events.add(id, 'config-changed', `DNS records left in Cloudflare (zone not reachable with this token): ${leftBehind.join(', ')}`);
     }
     if (account) await api.deleteTunnel(id).catch(ignore('TUNNEL_NOT_FOUND'));
     this.known.delete(id);
@@ -304,13 +316,21 @@ export class TunnelService {
     }
 
     // A tunnel only serves hostnames of zones in its own account.
-    const zones = account.zones;
-    const zoneOf = new Map<string, CfZone>();
-    const missing: string[] = [];
-    for (const r of input.routes) {
-      const z = findZoneForHostname(r.hostname, zones);
-      if (z) zoneOf.set(r.hostname, z);
-      else if (!missing.includes(r.hostname)) missing.push(r.hostname);
+    const match = (zones: CfZone[]) => {
+      const zoneOf = new Map<string, CfZone>();
+      const missing: string[] = [];
+      for (const r of input.routes) {
+        const z = findZoneForHostname(r.hostname, zones);
+        if (z) zoneOf.set(r.hostname, z);
+        else if (!missing.includes(r.hostname)) missing.push(r.hostname);
+      }
+      return { zoneOf, missing };
+    };
+    let { zoneOf, missing } = match(account.zones);
+    if (missing.length) {
+      // The zone may have been added after the accounts were cached.
+      this.d.accounts.invalidate();
+      ({ zoneOf, missing } = match((await this.d.accounts.get(account.id)).zones));
     }
     if (missing.length) throw new AppError('ZONE_NOT_FOUND', "Hostname does not belong to a zone in this tunnel's account", 400, { hostnames: missing });
 

@@ -293,7 +293,8 @@ describe('review fixes', () => {
     const b = await multi.service.create('b', SECOND_ACCOUNT.id);
     dropSecondAccount();
     const list = await multi.service.list();
-    expect(list.unavailableAccounts).toEqual([{ id: SECOND_ACCOUNT.id, name: SECOND_ACCOUNT.id, code: 'ACCOUNT_NOT_FOUND' }]);
+    // Named by the last name seen for the account.
+    expect(list.unavailableAccounts).toEqual([{ id: SECOND_ACCOUNT.id, name: 'Second Org', code: 'ACCOUNT_NOT_FOUND' }]);
     expect(list.tunnels.find((t) => t.id === b.id)).toMatchObject({ managedHere: true, name: '(account not reachable)' });
     expect((await multi.service.get(b.id)).name).toBe('(account not reachable)');
     await multi.service.delete(b.id);
@@ -320,5 +321,31 @@ describe('review fixes', () => {
     // A route change made here is reflected right away.
     await multi.service.updateRoutes(a.id, upd(0, [route('ha.example.com')]));
     expect((await multi.service.list()).tunnels.find((t) => t.id === a.id)!.routeCount).toBe(1);
+  });
+});
+
+describe('follow-ups', () => {
+  let multi: Awaited<ReturnType<typeof makeTunnelEnv>>;
+  beforeEach(async () => {
+    multi = await makeTunnelEnv({ second: true });
+  });
+  afterEach(() => multi.cf.close());
+
+  it('accepts a domain added in Cloudflare after the accounts were cached', async () => {
+    const b = await multi.service.create('b', SECOND_ACCOUNT.id);
+    const zone = { id: `${'x'.repeat(31)}4`, name: 'fresh.net', status: 'active', account: SECOND_ACCOUNT };
+    multi.cf.state.zones.push(zone);
+    multi.cf.state.dns.set(zone.id, []);
+    const d = await multi.service.updateRoutes(b.id, upd(0, [route('app.fresh.net')]));
+    expect(d.routes.map((r) => r.hostname)).toEqual(['app.fresh.net']);
+  });
+  it('names DNS records it could not remove because their zone is out of reach', async () => {
+    const b = await multi.service.create('b', SECOND_ACCOUNT.id);
+    await multi.service.updateRoutes(b.id, upd(0, [route('ha.second.net')]));
+    multi.cf.state.accounts = multi.cf.state.accounts.filter((a) => a.id !== SECOND_ACCOUNT.id);
+    multi.cf.state.zones = multi.cf.state.zones.filter((z) => z.account.id !== SECOND_ACCOUNT.id);
+    multi.accounts.invalidate();
+    await multi.service.delete(b.id);
+    expect(multi.events.list({ tunnelId: b.id, limit: 10 }).map((e) => e.message).join(' | ')).toContain('ha.second.net');
   });
 });

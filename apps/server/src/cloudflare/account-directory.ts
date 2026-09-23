@@ -8,29 +8,52 @@ export interface AccountInfo { id: string; name: string; zones: CfZone[] }
  * Every account the stored token reaches, with its zones. GET /accounts comes back empty for tokens
  * without "Account Settings: Read", so accounts are also collected from the zones the token can read.
  */
+export interface DirectoryOptions {
+  ttlMs?: number;
+  /** How long a failed discovery is answered from cache, so an outage does not trigger one per request. */
+  failureTtlMs?: number;
+  now?: () => number;
+  /** Active accounts; all reachable accounts are active when omitted. */
+  isEnabled?: (accountId: string) => boolean;
+  onDiscovered?: (accounts: AccountInfo[]) => void;
+}
+
 export class AccountDirectory {
-  private cache: { token: string; at: number; value: Promise<AccountInfo[]> } | null = null;
+  private cache: { token: string; at: number; failed: boolean; value: Promise<AccountInfo[]> } | null = null;
   private ttlMs: number;
+  private failureTtlMs: number;
   private now: () => number;
 
-  constructor(private client: () => CfClient, opts: { ttlMs?: number; now?: () => number } = {}) {
+  constructor(private client: () => CfClient, private opts: DirectoryOptions = {}) {
     this.ttlMs = opts.ttlMs ?? 60_000;
+    this.failureTtlMs = opts.failureTtlMs ?? 10_000;
     this.now = opts.now ?? Date.now;
   }
 
-  list(): Promise<AccountInfo[]> {
+  /** Every account the token reaches, active or not. */
+  listAll(): Promise<AccountInfo[]> {
     const c = this.client();
-    const fresh = this.cache && this.cache.token === c.token && this.now() - this.cache.at <= this.ttlMs;
+    const e = this.cache;
+    const fresh = e && e.token === c.token && this.now() - e.at <= (e.failed ? this.failureTtlMs : this.ttlMs);
     if (!fresh) {
       const value = discover(c);
-      const entry = { token: c.token, at: this.now(), value };
+      const entry = { token: c.token, at: this.now(), failed: false, value };
       this.cache = entry;
-      // A failed discovery is not cached.
-      value.catch(() => {
-        if (this.cache === entry) this.cache = null;
-      });
+      value.then(
+        (l) => this.opts.onDiscovered?.(l),
+        () => {
+          entry.failed = true;
+          entry.at = this.now();
+        },
+      );
     }
     return this.cache!.value;
+  }
+
+  /** The accounts the app works with. */
+  async list(): Promise<AccountInfo[]> {
+    const all = await this.listAll();
+    return this.opts.isEnabled ? all.filter((a) => this.opts.isEnabled!(a.id)) : all;
   }
 
   async get(accountId: string): Promise<AccountInfo> {
@@ -45,7 +68,14 @@ export class AccountDirectory {
 }
 
 async function discover(c: CfClient): Promise<AccountInfo[]> {
-  const [listed, zones] = await Promise.all([c.paginate<CfAccount>('/accounts?per_page=50'), c.paginate<CfZone>('/zones?per_page=50')]);
+  const [listed, zones] = await Promise.all([
+    // Some tokens may not list accounts at all; their accounts still show up on their zones.
+    c.paginate<CfAccount>('/accounts?per_page=50').catch((e) => {
+      if (e instanceof AppError && e.code === 'CF_PERMISSION_MISSING') return [] as CfAccount[];
+      throw e;
+    }),
+    c.paginate<CfZone>('/zones?per_page=50'),
+  ]);
   const byId = new Map<string, AccountInfo>();
   for (const a of listed) byId.set(a.id, { id: a.id, name: a.name, zones: [] });
   for (const z of zones) {

@@ -26,4 +26,15 @@ describe('SettingsRepo', () => {
     repo.setLastAccountId('b'.repeat(32));
     expect(repo.lastAccountId()).toBe('b'.repeat(32));
   });
+  it('stores the active accounts and the names seen so far', () => {
+    const repo = new SettingsRepo(openDatabase(':memory:'), Buffer.alloc(32));
+    expect(repo.enabledAccounts()).toBeNull();
+    repo.setEnabledAccounts(['a'.repeat(32)]);
+    expect(repo.enabledAccounts()).toEqual(['a'.repeat(32)]);
+    repo.setEnabledAccounts(null);
+    expect(repo.enabledAccounts()).toBeNull();
+    repo.rememberAccountNames([{ id: 'a'.repeat(32), name: 'Home' }]);
+    repo.rememberAccountNames([{ id: 'b'.repeat(32), name: 'Work' }]);
+    expect(repo.accountNames()).toEqual({ ['a'.repeat(32)]: 'Home', ['b'.repeat(32)]: 'Work' });
+  });
 });

@@ -63,7 +63,13 @@ export function createContext(
     if (cached?.client.token !== c.token) cached = { client: cfClient(c.token), apis: new Map() };
     return cached;
   };
-  const accounts = new AccountDirectory(() => current().client);
+  const accounts = new AccountDirectory(() => current().client, {
+    isEnabled: (id) => {
+      const enabled = settings.enabledAccounts();
+      return !enabled || enabled.includes(id);
+    },
+    onDiscovered: (list) => settings.rememberAccountNames(list),
+  });
   const api = (accountId: string) => {
     const { client, apis } = current();
     if (!apis.has(accountId)) apis.set(accountId, new CfApi(client, accountId));
@@ -78,7 +84,9 @@ export function createContext(
     admin: new AdminRepo(db),
     sessions: new SessionStore(db),
     sampler: new MetricsSampler(),
-    service: new TunnelService({ api, accounts, backend, tunnels, dns, events, onAccountUsed: (id) => settings.setLastAccountId(id) }),
+    service: new TunnelService({ api, accounts, backend, tunnels, dns, events, onAccountUsed: (id) => settings.setLastAccountId(id),
+      accountName: (id) => settings.accountNames()[id],
+    }),
     latestVersion: overrides.latestVersion ?? (() => latestCloudflaredVersion()),
   };
 }

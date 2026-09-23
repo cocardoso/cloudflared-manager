@@ -57,4 +57,29 @@ describe('AccountDirectory', () => {
     expect((await dir.get(FAKE_ACCOUNT.id)).name).toBe('Home Lab');
     await expect(dir.get('c'.repeat(32))).rejects.toMatchObject({ code: 'ACCOUNT_NOT_FOUND', status: 404 });
   });
+  it('lists only active accounts, while listAll() keeps every reachable one', async () => {
+    cf.state.addSecondAccount();
+    const active = new AccountDirectory(() => new CfClient({ token, baseUrl: cf.baseUrl }), { isEnabled: (id) => id === SECOND_ACCOUNT.id });
+    expect((await active.list()).map((a) => a.name)).toEqual(['Second Org']);
+    expect((await active.listAll()).map((a) => a.name)).toEqual(['Home Lab', 'Second Org']);
+    await expect(active.get(FAKE_ACCOUNT.id)).rejects.toMatchObject({ code: 'ACCOUNT_NOT_FOUND' });
+  });
+  it('reports every account it discovers', async () => {
+    const seen: string[] = [];
+    await new AccountDirectory(() => new CfClient({ token, baseUrl: cf.baseUrl }), { onDiscovered: (l) => seen.push(...l.map((a) => a.name)) }).list();
+    expect(seen).toEqual(['Home Lab']);
+  });
+  it('falls back to zones when GET /accounts is forbidden', async () => {
+    cf.state.failNext(/^\/accounts$/, 403, [{ code: 9109, message: 'Unauthorized to access requested resource' }]);
+    expect((await dir.list()).map((a) => a.name)).toEqual(['Home Lab']);
+  });
+  it('remembers a failed discovery briefly instead of retrying on every call', async () => {
+    const d = new AccountDirectory(() => new CfClient({ token, baseUrl: cf.baseUrl }), { now: () => now, failureTtlMs: 10_000 });
+    cf.state.failNext(/^\/zones$/, 429, [{ code: 971, message: 'Please wait' }]);
+    await expect(d.list()).rejects.toMatchObject({ code: 'CF_RATE_LIMITED' });
+    await expect(d.list()).rejects.toMatchObject({ code: 'CF_RATE_LIMITED' });
+    expect(cf.state.requests.filter((r) => r === 'GET /zones')).toHaveLength(1);
+    now = 10_001;
+    expect(await d.list()).toHaveLength(1);
+  });
 });

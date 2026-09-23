@@ -59,6 +59,7 @@ export const adminSetupSchema = z.object({
 export const loginSchema = z.object({ username: z.string().min(1), password: z.string().min(1) });
 export const changePasswordSchema = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(12).max(256) });
 export const cloudflareTokenSchema = z.object({ token: z.string().trim().min(20) });
+export const enabledAccountsSchema = z.object({ enabled: z.array(accountIdSchema).min(1) });
 export const testOriginSchema = z.object({ service: serviceSchema });
 
 export const backupSchema = z.object({

@@ -91,7 +91,7 @@ describe('cloudflare connection', () => {
     const s = (await app.inject({ url: '/api/cloudflare/status', headers: h })).json();
     expect(s).toMatchObject({ connected: true, tokenSuffix: cf.token.slice(-4), lastAccountId: null });
     expect(JSON.stringify(s)).not.toContain(cf.token);
-    expect(s.accounts).toEqual([{ id: FAKE_ACCOUNT.id, name: 'Home Lab', zones: [{ id: cf.state.zones[0]!.id, name: 'example.com' }, { id: cf.state.zones[1]!.id, name: 'other.dev' }] }]);
+    expect(s.accounts).toEqual([{ id: FAKE_ACCOUNT.id, name: 'Home Lab', enabled: true, zones: [{ id: cf.state.zones[0]!.id, name: 'example.com' }, { id: cf.state.zones[1]!.id, name: 'other.dev' }] }]);
     expect((await app.inject('/api/setup/status')).json()).toEqual({ adminCreated: true, cloudflareConnected: true });
   });
   it('connects to every account the token reaches without asking', async () => {
@@ -136,6 +136,52 @@ describe('cloudflare connection', () => {
   it('returns CF_NOT_CONNECTED before token is set', async () => {
     const h = await setupAdmin();
     expect((await app.inject({ url: '/api/tunnels', headers: h })).json().code).toBe('CF_NOT_CONNECTED');
+  });
+});
+
+describe('active accounts', () => {
+  const put = (h: { cookie: string }, enabled: string[]) => app.inject({ method: 'PUT', url: '/api/cloudflare/accounts', headers: h, payload: { enabled } });
+  const status = async (h: { cookie: string }) => (await app.inject({ url: '/api/cloudflare/status', headers: h })).json();
+
+  it('limits tunnels and creation to the active accounts', async () => {
+    const h = await setupAdmin();
+    cf.state.addSecondAccount();
+    await connect(h);
+    expect((await status(h)).accounts.map((a: { enabled: boolean }) => a.enabled)).toEqual([true, true]);
+    await app.inject({ method: 'POST', url: '/api/tunnels', headers: h, payload: { name: 'home', accountId: FAKE_ACCOUNT.id } });
+    expect((await put(h, [SECOND_ACCOUNT.id])).statusCode).toBe(409);
+    expect((await put(h, [SECOND_ACCOUNT.id])).json()).toMatchObject({ code: 'ACCOUNT_IN_USE', details: { accounts: ['Home Lab'] } });
+    expect((await put(h, [FAKE_ACCOUNT.id])).statusCode).toBe(200);
+    const s = await status(h);
+    expect(s.accounts.map((a: { name: string; enabled: boolean }) => [a.name, a.enabled])).toEqual([['Home Lab', true], ['Second Org', false]]);
+    const created = await app.inject({ method: 'POST', url: '/api/tunnels', headers: h, payload: { name: 'x', accountId: SECOND_ACCOUNT.id } });
+    expect(created.json().code).toBe('ACCOUNT_NOT_FOUND');
+    // With one active account, it is used without asking.
+    expect((await app.inject({ method: 'POST', url: '/api/tunnels', headers: h, payload: { name: 'y' } })).statusCode).toBe(201);
+  });
+  it('validates the selection', async () => {
+    const h = await setupAdmin();
+    await connect(h);
+    expect((await put(h, [])).json().code).toBe('VALIDATION_ERROR');
+    expect((await put(h, ['c'.repeat(32)])).json().code).toBe('ACCOUNT_NOT_FOUND');
+  });
+  it('starts accounts the token reaches later as inactive once a selection exists', async () => {
+    const h = await setupAdmin();
+    await connect(h);
+    await put(h, [FAKE_ACCOUNT.id]);
+    cf.state.addSecondAccount();
+    await connect(h);
+    expect((await status(h)).accounts.map((a: { name: string; enabled: boolean }) => [a.name, a.enabled])).toEqual([['Home Lab', true], ['Second Org', false]]);
+  });
+  it('resets the selection when a new token reaches none of the active accounts', async () => {
+    const h = await setupAdmin();
+    cf.state.addSecondAccount();
+    await connect(h);
+    await put(h, [SECOND_ACCOUNT.id]);
+    cf.state.accounts = [FAKE_ACCOUNT];
+    cf.state.zones = cf.state.zones.filter((z) => z.account.id === FAKE_ACCOUNT.id);
+    await connect(h);
+    expect((await status(h)).accounts.map((a: { name: string; enabled: boolean }) => [a.name, a.enabled])).toEqual([['Home Lab', true]]);
   });
 });
 

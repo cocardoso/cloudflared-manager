@@ -19,11 +19,12 @@ export async function makeTunnelEnv(opts: { second?: boolean } = {}) {
   const db = openDatabase(':memory:');
   const backend = new FakeBackend(mkdtempSync(join(tmpdir(), 'tm-')));
   const client = new CfClient({ token: cf.token, baseUrl: cf.baseUrl });
-  const accounts = new AccountDirectory(() => client);
+  const names: Record<string, string> = {};
+  const accounts = new AccountDirectory(() => client, { onDiscovered: (l) => l.forEach((a) => (names[a.id] = a.name)) });
   const apiFor = (accountId: string) => new CfApi(client, accountId);
   const repos = { tunnels: new TunnelRepo(db), dns: new DnsRepo(db), events: new EventRepo(db) };
   const used: string[] = [];
-  const makeService = () => new TunnelService({ api: apiFor, accounts, backend, ...repos, onAccountUsed: (id) => used.push(id) });
+  const makeService = () => new TunnelService({ api: apiFor, accounts, backend, ...repos, onAccountUsed: (id) => used.push(id), accountName: (id) => names[id] });
   const service = makeService();
   return {
     cf, db, backend, accounts, service, makeService, used, ...repos,

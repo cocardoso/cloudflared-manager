@@ -46,7 +46,11 @@ export interface TunnelEvent {
 }
 
 export interface Zone { id: string; name: string }
-export interface CloudflareAccount extends AccountRef { zones: Zone[] }
+export interface CloudflareAccount extends AccountRef {
+  zones: Zone[];
+  /** Active accounts are the ones the app lists tunnels from and creates tunnels in. */
+  enabled: boolean;
+}
 export interface CloudflareStatus {
   connected: boolean; tokenSuffix: string | null;
   /** Account of the most recently created tunnel, preselected for the next one. */

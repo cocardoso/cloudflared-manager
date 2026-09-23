@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adminSetupSchema, backupSchema, cloudflareTokenSchema, createTunnelSchema, routeSchema, routesUpdateSchema, uuidSchema } from './schemas';
+import { adminSetupSchema, backupSchema, enabledAccountsSchema, cloudflareTokenSchema, createTunnelSchema, routeSchema, routesUpdateSchema, uuidSchema } from './schemas';
 import { ERROR_CODES } from './errors';
 
 describe('routeSchema', () => {
@@ -73,5 +73,16 @@ describe('account selection', () => {
   });
   it('knows ACCOUNT_NOT_FOUND', () => {
     expect(ERROR_CODES).toContain('ACCOUNT_NOT_FOUND');
+  });
+});
+
+describe('enabledAccountsSchema', () => {
+  it('needs at least one valid account id', () => {
+    expect(enabledAccountsSchema.parse({ enabled: ['a'.repeat(32)] })).toEqual({ enabled: ['a'.repeat(32)] });
+    expect(enabledAccountsSchema.safeParse({ enabled: [] }).success).toBe(false);
+    expect(enabledAccountsSchema.safeParse({ enabled: ['x'] }).success).toBe(false);
+  });
+  it('knows ACCOUNT_IN_USE', () => {
+    expect(ERROR_CODES).toContain('ACCOUNT_IN_USE');
   });
 });

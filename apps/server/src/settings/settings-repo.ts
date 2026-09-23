@@ -36,6 +36,28 @@ export class SettingsRepo {
     this.set('last_account_id', id);
   }
 
+  /** Ids of the active accounts, or null when every reachable account is active. */
+  enabledAccounts(): string[] | null {
+    const v = this.get('enabled_accounts');
+    return v ? (JSON.parse(v) as string[]) : null;
+  }
+
+  setEnabledAccounts(ids: string[] | null) {
+    if (ids) this.set('enabled_accounts', JSON.stringify(ids));
+    else this.db.prepare("delete from settings where key = 'enabled_accounts'").run();
+  }
+
+  /** Last known name of every account seen, to name accounts the token no longer reaches. */
+  accountNames(): Record<string, string> {
+    return JSON.parse(this.get('account_names') ?? '{}') as Record<string, string>;
+  }
+
+  rememberAccountNames(list: { id: string; name: string }[]) {
+    const names = this.accountNames();
+    for (const a of list) names[a.id] = a.name;
+    this.set('account_names', JSON.stringify(names));
+  }
+
   tokenSuffix() {
     return this.get('cf_token_suffix');
   }
