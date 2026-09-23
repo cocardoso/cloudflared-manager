@@ -42,12 +42,20 @@ describe('ProcessBackend', () => {
     await b.install(ID, env);
     expect((await b.status(ID)).state).toBe('inactive');
     await b.start(ID);
-    await until(async () => (await text(b)).includes('Starting tunnel'));
+    await until(async () => (await text(b)).includes('Registered tunnel connection'));
     const s = await b.status(ID);
     expect(s.state).toBe('active');
     expect(s.activeSince).toBeTruthy();
   });
 
+  it('reports activating until cloudflared registers a connection', async () => {
+    const { b } = make({ flags: 'FAKE_CF_NO_CONNECT=1' });
+    await b.install(ID, env);
+    await b.start(ID);
+    await until(async () => (await text(b)).includes('Starting tunnel'));
+    await sleep(200);
+    expect(await b.status(ID)).toMatchObject({ state: 'activating', activeSince: null });
+  });
   it('passes the token through the environment, never argv', async () => {
     const { b } = make();
     await b.install(ID, env);

@@ -67,6 +67,10 @@ export class ProcessBackend implements ServiceBackend {
   }
 
   private push(t: Tunnel, message: string) {
+    if (t.proc && t.state === 'activating' && message.includes('Registered tunnel connection')) {
+      t.state = 'active';
+      t.since = new Date().toISOString();
+    }
     const tag = / (DBG|INF|WRN|ERR|FTL) /.exec(` ${message} `)?.[1];
     const line: LogLine = { time: new Date().toISOString(), level: tag ? LEVELS[tag]! : 'info', message };
     t.lines.push(line);
@@ -105,8 +109,9 @@ export class ProcessBackend implements ServiceBackend {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     t.proc = proc;
-    t.state = 'active';
-    t.since = new Date().toISOString();
+    // Running is not connected: the tunnel is active once cloudflared reports an edge connection.
+    t.state = 'activating';
+    t.since = null;
     this.pipe(t, proc.stdout);
     this.pipe(t, proc.stderr);
 

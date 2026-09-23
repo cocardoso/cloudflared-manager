@@ -13,5 +13,9 @@ log('INF', `metrics=${process.env.TUNNEL_METRICS ?? ''}`);
 log('INF', `argv=${JSON.stringify(args)}`);
 log('INF', `token-present=${Boolean(process.env.TUNNEL_TOKEN)}`);
 
+// Like the real binary, a connection to the edge is only reported a moment after start.
+if (process.env.FAKE_CF_NO_CONNECT !== '1') {
+  setTimeout(() => log('INF', 'Registered tunnel connection connIndex=0 event=0 location=gru01 protocol=quic'), 30);
+}
 if (process.env.FAKE_CF_CRASH === '1') setTimeout(() => { log('ERR', 'crashing'); process.exit(1); }, 50);
 setInterval(() => {}, 1000);
