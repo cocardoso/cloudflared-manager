@@ -70,16 +70,18 @@ export class SystemdBackend implements ServiceBackend {
     return existsSync(envFilePath(this.etcDir, id));
   }
 
+  // --no-block: cloudflared is Type=notify and only reports ready once connected;
+  // waiting for that during an outage would hang the API and the watchdog.
   async start(id: string) {
-    await this.sudo(['systemctl', 'start', unit(id)]);
+    await this.sudo(['systemctl', '--no-block', 'start', unit(id)]);
   }
 
   async stop(id: string) {
-    await this.sudo(['systemctl', 'stop', unit(id)]);
+    await this.sudo(['systemctl', '--no-block', 'stop', unit(id)]);
   }
 
   async restart(id: string) {
-    await this.sudo(['systemctl', 'restart', unit(id)]);
+    await this.sudo(['systemctl', '--no-block', 'restart', unit(id)]);
   }
 
   async status(id: string): Promise<UnitStatus> {
