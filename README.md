@@ -11,6 +11,20 @@ A web UI to create and run **Cloudflare Tunnels** in your homelab. Deploy it as 
 - Live logs, event history, edge connections and a traffic chart.
 - UI in **English, Portuguese (Brazil), Spanish, French, Italian and German**, light and dark themes, built with the Cloudflare dashboard design system ([Kumo](https://www.npmjs.com/package/@cloudflare/kumo)).
 
+## Screenshots
+
+All data below is made up (documentation domains `example.com`/`.net`/`.org`); regenerate with `pnpm build && pnpm --filter @tm/server exec tsx ../../scripts/screenshots.mts`.
+
+![Tunnels across two Cloudflare accounts](docs/screenshots/dashboard.png)
+
+| Public hostnames | Adding a hostname |
+|---|---|
+| ![Public hostnames of a tunnel](docs/screenshots/tunnel-routes.png) | ![Add public hostname dialog](docs/screenshots/add-hostname.png) |
+| **Tunnel status** | **Settings** |
+| ![Tunnel details and edge connections](docs/screenshots/tunnel-status.png) | ![Cloudflare accounts and settings](docs/screenshots/settings.png) |
+
+![Dark theme](docs/screenshots/dashboard-dark.png)
+
 ## Choose how to run it
 
 | | Proxmox LXC | Docker |
