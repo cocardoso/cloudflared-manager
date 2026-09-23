@@ -54,10 +54,11 @@ export const updateTunnelSchema = z.object({
 
 export const adminSetupSchema = z.object({
   username: z.string().trim().min(3).max(32).regex(/^[a-zA-Z0-9._-]+$/),
-  password: z.string().min(12).max(256),
+  // Any non-empty password is accepted; the UI shows its strength and recommends 12+ characters.
+  password: z.string().min(1).max(256),
 });
 export const loginSchema = z.object({ username: z.string().min(1), password: z.string().min(1) });
-export const changePasswordSchema = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(12).max(256) });
+export const changePasswordSchema = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(1).max(256) });
 export const cloudflareTokenSchema = z.object({ token: z.string().trim().min(20) });
 export const enabledAccountsSchema = z.object({ enabled: z.array(accountIdSchema).min(1) });
 export const testOriginSchema = z.object({ service: serviceSchema });

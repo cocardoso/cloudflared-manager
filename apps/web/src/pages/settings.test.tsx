@@ -81,13 +81,15 @@ describe('SettingsPage', () => {
     expect(await screen.findByText(/Pull the latest image/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Update' })).toBeNull();
   });
-  it('rejects a short new password locally', async () => {
-    const calls = mockApi(routes);
+  it('allows a short new password while showing its strength', async () => {
+    const calls = mockApi({ ...routes, 'POST /api/auth/password': () => new Response(null, { status: 204 }) });
     renderWithProviders(<SettingsPage />);
     await userEvent.type(await screen.findByLabelText('Current password'), 'a-very-long-password');
     await userEvent.type(screen.getByLabelText('New password'), 'short');
-    expect(screen.getByRole('button', { name: 'Change password' }).hasAttribute('disabled')).toBe(true);
-    expect(calls.some((c) => c.key === 'POST /api/auth/password')).toBe(false);
+    expect(screen.getByText('Weak')).toBeTruthy();
+    expect(screen.getByText(/Recommended: 12 or more characters/)).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Change password' }));
+    await waitFor(() => expect(calls.some((c) => c.key === 'POST /api/auth/password')).toBe(true));
   });
   it('switches language', async () => {
     mockApi(routes);

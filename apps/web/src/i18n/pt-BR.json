@@ -92,7 +92,6 @@
     "step2": "Conectar à Cloudflare",
     "username": "Usuário",
     "password": "Senha",
-    "passwordHint": "Pelo menos 12 caracteres",
     "confirmPassword": "Confirmar senha",
     "passwordMismatch": "As senhas não coincidem",
     "createAdmin": "Criar administrador",
@@ -110,7 +109,8 @@
     "connectedAccounts_one": "Conectado a {{count}} conta",
     "connectedAccounts_other": "Conectado a {{count}} contas",
     "accountsSummary_one": "{{accounts}} · {{count}} domínio",
-    "accountsSummary_other": "{{accounts}} · {{count}} domínios"
+    "accountsSummary_other": "{{accounts}} · {{count}} domínios",
+    "passwordRequired": "Informe uma senha"
   },
   "login": {
     "title": "Entrar",
@@ -304,5 +304,13 @@
     "hint": "Escolha as contas com que este app trabalha. Os túneis são listados e criados apenas nas contas marcadas.",
     "save": "Salvar contas",
     "saved": "Contas salvas"
+  },
+  "password": {
+    "strength": "Força da senha",
+    "weak": "Fraca",
+    "fair": "Razoável",
+    "good": "Boa",
+    "strong": "Forte",
+    "recommendation": "Recomendado: 12 ou mais caracteres, misturando letras, números e símbolos."
   }
 }

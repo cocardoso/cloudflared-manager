@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adminSetupSchema, backupSchema, enabledAccountsSchema, cloudflareTokenSchema, createTunnelSchema, routeSchema, routesUpdateSchema, uuidSchema } from './schemas';
+import { adminSetupSchema, backupSchema, changePasswordSchema, enabledAccountsSchema, cloudflareTokenSchema, createTunnelSchema, routeSchema, routesUpdateSchema, uuidSchema } from './schemas';
 import { ERROR_CODES } from './errors';
 
 describe('routeSchema', () => {
@@ -43,8 +43,11 @@ describe('routesUpdateSchema', () => {
 });
 
 describe('adminSetupSchema', () => {
-  it('requires 12+ char password', () => {
-    expect(() => adminSetupSchema.parse({ username: 'admin', password: 'short' })).toThrow();
+  it('accepts any non-empty password; strength is only advised', () => {
+    expect(() => adminSetupSchema.parse({ username: 'admin', password: '' })).toThrow();
+    expect(adminSetupSchema.parse({ username: 'admin', password: 'short' }).password).toBe('short');
+    expect(changePasswordSchema.parse({ currentPassword: 'x', newPassword: 'abc' }).newPassword).toBe('abc');
+    expect(() => changePasswordSchema.parse({ currentPassword: 'x', newPassword: '' })).toThrow();
     expect(adminSetupSchema.parse({ username: 'admin', password: 'a-very-long-pass' }).username).toBe('admin');
   });
 });
