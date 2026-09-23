@@ -17,4 +17,7 @@ else
   OWNER_FLAGS=(--uid 0 --gid 0 --uname root --gname root)
 fi
 tar "${OWNER_FLAGS[@]}" -czf "$OUT/cloudflared-manager-${VERSION}.tar.gz" -C "$OUT" "cloudflared-manager-${VERSION}"
+# Installers verify the tarball against this file before extracting it.
+if command -v sha256sum >/dev/null; then SHA256=(sha256sum); else SHA256=(shasum -a 256); fi
+(cd "$OUT" && "${SHA256[@]}" "cloudflared-manager-${VERSION}.tar.gz" >"cloudflared-manager-${VERSION}.tar.gz.sha256")
 echo "$OUT/cloudflared-manager-${VERSION}.tar.gz"

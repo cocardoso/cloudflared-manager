@@ -61,6 +61,12 @@ function update_script() {
     msg_info "Updating ${APP} to ${RELEASE}"
     TMP=$(mktemp -d)
     curl -fsSL "https://github.com/${GH_REPO}/releases/download/${RELEASE}/cloudflared-manager-${RELEASE}.tar.gz" -o "$TMP/app.tar.gz"
+    curl -fsSL "https://github.com/${GH_REPO}/releases/download/${RELEASE}/cloudflared-manager-${RELEASE}.tar.gz.sha256" -o "$TMP/app.tar.gz.sha256"
+    if ! echo "$(cut -d' ' -f1 "$TMP/app.tar.gz.sha256")  $TMP/app.tar.gz" | sha256sum -c --status; then
+      msg_error "Checksum mismatch for release ${RELEASE}; update aborted"
+      rm -rf "$TMP"
+      exit 1
+    fi
     mkdir -p "$TMP/new"
     tar --no-same-owner -xzf "$TMP/app.tar.gz" -C "$TMP/new" --strip-components=1
     chown -R root:root "$TMP/new"
