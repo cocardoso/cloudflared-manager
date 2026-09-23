@@ -4,7 +4,7 @@ export function getStoredTheme(): Theme {
   try {
     return (localStorage.getItem('tm.theme') as Theme | null) ?? 'light';
   } catch {
-    return 'system';
+    return 'light';
   }
 }
 
