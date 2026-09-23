@@ -1,5 +1,5 @@
 export interface CfAccount { id: string; name: string }
-export interface CfZone { id: string; name: string; status: string }
+export interface CfZone { id: string; name: string; status: string; account?: CfAccount }
 export interface CfConnection {
   colo_name: string; opened_at: string; origin_ip: string; client_version: string; is_pending_reconnect: boolean;
 }

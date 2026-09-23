@@ -9,7 +9,7 @@ type CfErr = { code: number; message: string };
 interface TunnelEntry { tunnel: CfTunnel; config: CfTunnelConfig; version: number; token: string }
 export interface FakeState {
   accounts: { id: string; name: string }[];
-  zones: { id: string; name: string; status: string }[];
+  zones: { id: string; name: string; status: string; account: { id: string; name: string } }[];
   tunnels: Map<string, TunnelEntry>;
   dns: Map<string, CfDnsRecord[]>;
   failures: { re: RegExp; method?: string; status: number; errors: CfErr[] }[];
@@ -21,8 +21,8 @@ export async function startFakeCloudflare(opts: { port?: number } = {}) {
   const state: FakeState = {
     accounts: [FAKE_ACCOUNT],
     zones: [
-      { id: `${'z'.repeat(31)}1`, name: 'example.com', status: 'active' },
-      { id: `${'z'.repeat(31)}2`, name: 'other.dev', status: 'active' },
+      { id: `${'z'.repeat(31)}1`, name: 'example.com', status: 'active', account: FAKE_ACCOUNT },
+      { id: `${'z'.repeat(31)}2`, name: 'other.dev', status: 'active', account: FAKE_ACCOUNT },
     ],
     tunnels: new Map(),
     dns: new Map(),
@@ -61,7 +61,10 @@ export async function startFakeCloudflare(opts: { port?: number } = {}) {
 
   app.get('/user/tokens/verify', async () => ok({ id: 't1', status: 'active' }));
   app.get('/accounts', async () => page(state.accounts));
-  app.get('/zones', async () => page(state.zones));
+  app.get('/zones', async (req) => {
+    const accountId = (req.query as Record<string, string>)['account.id'];
+    return page(state.zones.filter((z) => !accountId || z.account.id === accountId));
+  });
 
   app.get('/accounts/:a/cfd_tunnel', async () => page([...state.tunnels.values()].filter((e) => !e.tunnel.deleted_at).map((e) => e.tunnel)));
   app.post('/accounts/:a/cfd_tunnel', async (req) => {

@@ -93,11 +93,20 @@ describe('cloudflare connection', () => {
   it('asks for account selection when token has several accounts', async () => {
     const h = await setupAdmin();
     cf.state.accounts.push({ id: 'b'.repeat(32), name: 'Work' });
+    cf.state.zones.push({ id: `${'y'.repeat(31)}3`, name: 'work.io', status: 'active', account: { id: 'b'.repeat(32), name: 'Work' } });
     const r = await app.inject({ method: 'POST', url: '/api/cloudflare/token', headers: h, payload: { token: cf.token } });
     expect(r.statusCode).toBe(409);
     expect(r.json().details.accounts).toHaveLength(2);
     const ok = await app.inject({ method: 'POST', url: '/api/cloudflare/token', headers: h, payload: { token: cf.token, accountId: 'b'.repeat(32) } });
     expect(ok.json().accountName).toBe('Work');
+  });
+  it('discovers the account from zones when /accounts comes back empty', async () => {
+    // Tokens without "Account Settings: Read" get an empty account list.
+    const h = await setupAdmin();
+    cf.state.accounts = [];
+    const r = await app.inject({ method: 'POST', url: '/api/cloudflare/token', headers: h, payload: { token: cf.token } });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({ connected: true, accountName: 'Home Lab' });
   });
   it('rejects invalid token', async () => {
     const h = await setupAdmin();
