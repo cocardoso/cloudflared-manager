@@ -1,6 +1,7 @@
 {
   "name": "cloudflared-manager",
   "private": true,
+  "license": "MIT",
   "packageManager": "pnpm@9.15.4",
   "engines": {
     "node": ">=22.13"

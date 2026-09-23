@@ -33,6 +33,7 @@ RUN apt-get update \
 
 COPY --from=build /src/apps/server/dist/server.mjs /app/server.mjs
 COPY --from=build /src/apps/web/dist /app/web
+COPY LICENSE /app/LICENSE
 
 ENV NODE_ENV=production \
     SERVICE_BACKEND=process \
