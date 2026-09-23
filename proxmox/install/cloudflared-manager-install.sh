@@ -43,7 +43,10 @@ chmod 0600 /etc/tunnel-manager/secret.key
 RELEASE=$(curl -fsSL "https://api.github.com/repos/${GH_REPO}/releases/latest" | jq -r '.tag_name')
 TMP=$(mktemp -d)
 curl -fsSL "https://github.com/${GH_REPO}/releases/download/${RELEASE}/cloudflared-manager-${RELEASE}.tar.gz" -o "$TMP/app.tar.gz"
-curl -fsSL "https://github.com/${GH_REPO}/releases/download/${RELEASE}/cloudflared-manager-${RELEASE}.tar.gz.sha256" -o "$TMP/app.tar.gz.sha256"
+if ! curl -fsSL "https://github.com/${GH_REPO}/releases/download/${RELEASE}/cloudflared-manager-${RELEASE}.tar.gz.sha256" -o "$TMP/app.tar.gz.sha256"; then
+  msg_error "Release ${RELEASE} has no checksum file"
+  exit 1
+fi
 if ! echo "$(cut -d' ' -f1 "$TMP/app.tar.gz.sha256")  $TMP/app.tar.gz" | sha256sum -c --status; then
   msg_error "Checksum mismatch for release ${RELEASE}"
   exit 1

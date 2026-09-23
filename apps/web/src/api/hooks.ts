@@ -66,7 +66,9 @@ export function useSaveRoutes(id: string) {
   return useMutation({
     mutationFn: (b: { version: number; routes: Route[]; overwriteDns?: string[]; keepDns?: string[] }) =>
       api.put<TunnelDetail>(`/tunnels/${id}/routes`, b),
-    onSuccess: (detail) => {
+    onSuccess: async (detail) => {
+      // A reload started before the save would land afterwards with the old routes.
+      await qc.cancelQueries({ queryKey: qk.tunnel(id) });
       qc.setQueryData(qk.tunnel(id), detail);
       for (const k of [qk.tunnels, qk.events(id)]) void qc.invalidateQueries({ queryKey: k });
     },

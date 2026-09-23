@@ -18,7 +18,7 @@ function make(opts: { flags?: string; bin?: string } = {}) {
     writeFileSync(bin, `#!/bin/sh\n${opts.flags ?? ''} exec node ${FAKE} "$@"\n`);
     chmodSync(bin, 0o755);
   }
-  const b = new ProcessBackend({ etcDir: join(dir, 'etc'), bin, restartDelayMs: 50, stopGraceMs: 200 });
+  const b = new ProcessBackend({ etcDir: join(dir, 'etc'), bin, restartDelayMs: 50, stopGraceMs: 200, readyPollMs: 50 });
   backends.push(b);
   return { b, dir };
 }
@@ -50,11 +50,19 @@ describe('ProcessBackend', () => {
 
   it('reports activating until cloudflared registers a connection', async () => {
     const { b } = make({ flags: 'FAKE_CF_NO_CONNECT=1' });
-    await b.install(ID, env);
+    // A port of its own: another test's process could answer /ready on the shared one.
+    await b.install(ID, { ...env, metricsPort: 20952 });
     await b.start(ID);
     await until(async () => (await text(b)).includes('Starting tunnel'));
     await sleep(200);
     expect(await b.status(ID)).toMatchObject({ state: 'activating', activeSince: null });
+  });
+  it('notices the connection through /ready when info lines are not logged', async () => {
+    const { b } = make();
+    await b.install(ID, { ...env, logLevel: 'warn', metricsPort: 20951 });
+    await b.start(ID);
+    await until(async () => (await b.status(ID)).state === 'active');
+    expect(await text(b)).not.toContain('Registered tunnel connection');
   });
   it('passes the token through the environment, never argv', async () => {
     const { b } = make();
@@ -106,7 +114,7 @@ describe('ProcessBackend', () => {
     await until(async () => (await b.status(ID)).state === 'active');
     await b.shutdownAll();
     expect(existsSync(join(dir, 'etc', 'tunnels', `${ID}.stopped`))).toBe(false);
-    const again = new ProcessBackend({ etcDir: join(dir, 'etc'), bin: join(dir, 'cloudflared'), restartDelayMs: 50, stopGraceMs: 200 });
+    const again = new ProcessBackend({ etcDir: join(dir, 'etc'), bin: join(dir, 'cloudflared'), restartDelayMs: 50, stopGraceMs: 200, readyPollMs: 50 });
     backends.push(again);
     await again.startAll();
     await until(async () => (await again.status(ID)).state === 'active');

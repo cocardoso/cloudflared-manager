@@ -249,7 +249,9 @@ export class TunnelService {
     if (envChanged) {
       const token = await api!.getTunnelToken(id);
       await this.d.backend.updateEnv(id, this.envFor(this.d.tunnels.get(id)!, token));
-      if ((await this.d.backend.status(id)).state === 'active') await this.d.backend.restart(id);
+      // A tunnel still trying to connect gets the new settings too: they may be what lets it connect.
+      const { state } = await this.d.backend.status(id);
+      if (state === 'active' || state === 'activating') await this.d.backend.restart(id);
     }
     this.d.events.add(id, 'config-changed', 'Tunnel settings updated', patch.name);
     return this.get(id);
@@ -285,6 +287,8 @@ export class TunnelService {
     const accounts = await this.d.accounts.list();
     // DNS endpoints are zone-scoped, so any account's client can remove a record.
     const api = this.d.api(account?.id ?? accounts[0]?.id ?? '');
+    // Read before removal so the deletion event stays named even when older events were pruned.
+    const name = account ? (await api.getTunnel(id).catch(() => null))?.name : undefined;
     if (this.d.backend.isInstalled(id)) await this.d.backend.uninstall(id);
     if (account) await api.cleanupConnections(id).catch(ignore('TUNNEL_NOT_FOUND', 'CF_API_ERROR'));
     const zones = new Set((await this.d.accounts.listAll()).flatMap((a) => a.zones.map((z) => z.id)));
@@ -302,7 +306,7 @@ export class TunnelService {
     this.known.delete(id);
     this.counts.delete(id);
     this.d.tunnels.delete(id);
-    this.d.events.add(id, 'deleted', 'Tunnel deleted');
+    this.d.events.add(id, 'deleted', 'Tunnel deleted', name);
   }
 
   /**

@@ -37,11 +37,13 @@ describe('openDatabase', () => {
     old.exec(MIGRATIONS[1]!);
     old.exec('insert into schema_version values (1), (2)');
     old.exec(`insert into events (tunnel_id, type, message, created_at) values
-      ('t1', 'created', 'Tunnel "home" created', 1), ('t1', 'deleted', 'Tunnel deleted', 2), ('t2', 'deleted', 'Tunnel deleted', 3)`);
+      ('t1', 'created', 'Tunnel "home" created', 1), ('t1', 'deleted', 'Tunnel deleted', 2), ('t2', 'deleted', 'Tunnel deleted', 3),
+      ('t3', 'adopted', 'Tunnel "say "hi"" adopted', 4)`);
     old.close();
     const db = openDatabase(path);
     expect(db.prepare('select tunnel_id, tunnel_name from events order by id').all()).toEqual([
       { tunnel_id: 't1', tunnel_name: 'home' }, { tunnel_id: 't1', tunnel_name: 'home' }, { tunnel_id: 't2', tunnel_name: null },
+      { tunnel_id: 't3', tunnel_name: 'say "hi"' },
     ]);
   });
 });

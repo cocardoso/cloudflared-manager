@@ -1,4 +1,5 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
+import { focusManager } from '@tanstack/react-query';
 import userEvent from '@testing-library/user-event';
 import type { TunnelDetail } from '@tm/shared';
 import { Route, Routes } from 'react-router';
@@ -71,6 +72,36 @@ describe('TunnelPage', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(calls.map((c) => c.key)).toContain(`PUT /api/tunnels/${ID}/routes`));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Add public hostname' })).toBeNull());
+    expect(screen.getByText('ha.example.com')).toBeTruthy();
+  });
+  it('keeps the saved hostnames when an older reload lands after the save', async () => {
+    let gets = 0;
+    let finishStale: (r: Response) => void = () => {};
+    const saved = { ...tunnel, routes: [{ hostname: 'ha.example.com', service: 'http://10.0.0.5:8123' }], routeCount: 1, configVersion: 2 };
+    mockApi({
+      // First load answers; the second (a reload started before the save) only answers later, with old data.
+      [`GET /api/tunnels/${ID}`]: () => (gets++ === 0 ? json(tunnel) : new Promise<Response>((r) => (finishStale = r))),
+      'GET /api/cloudflare/status': () => json({
+        connected: true, tokenSuffix: 'abcd', lastAccountId: null,
+        accounts: [{ id: 'a'.repeat(32), name: 'Home Lab', enabled: true, zones: [{ id: 'z1', name: 'example.com' }] }],
+      }),
+      [`PUT /api/tunnels/${ID}/routes`]: () => json(saved),
+      [`GET /api/tunnels/${ID}/events`]: () => new Promise<Response>(() => {}),
+    });
+    renderWithProviders(page(), { route: `/tunnels/${ID}` });
+    await userEvent.click(await screen.findByRole('button', { name: 'Add public hostname' }));
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    await waitFor(() => expect(gets).toBe(2));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.type(within(dialog).getByLabelText('Subdomain'), 'ha');
+    await userEvent.type(within(dialog).getByLabelText('URL'), '10.0.0.5:8123');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('ha.example.com')).toBeTruthy();
+    await act(async () => finishStale(json(tunnel)));
+    await new Promise((r) => setTimeout(r, 50));
     expect(screen.getByText('ha.example.com')).toBeTruthy();
   });
   it('offers to run a foreign tunnel here', async () => {

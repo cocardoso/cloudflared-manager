@@ -188,6 +188,12 @@ describe('delete', () => {
     expect(env.cf.state.tunnels.get(t.id)!.tunnel.deleted_at).not.toBeNull();
     expect(env.tunnels.get(t.id)).toBeNull();
   });
+  it('names the deletion event even when older events were pruned', async () => {
+    const t = await env.service.create('home');
+    env.db.prepare('delete from events').run();
+    await env.service.delete(t.id);
+    expect(env.events.list({ tunnelId: t.id, limit: 1 })[0]).toMatchObject({ type: 'deleted', tunnelName: 'home' });
+  });
   it('keeps the tunnel name on its deletion event', async () => {
     const t = await env.service.create('home');
     await env.service.delete(t.id);
@@ -217,6 +223,12 @@ describe('update settings', () => {
     const t = await env.api.createTunnel('elsewhere');
     await expect(env.service.update(t.id, { keepAlive: false })).rejects.toMatchObject({ code: 'TUNNEL_NOT_MANAGED' });
     await expect(env.service.start(t.id)).rejects.toMatchObject({ code: 'TUNNEL_NOT_MANAGED' });
+  });
+  it('restarts a tunnel still connecting when its protocol changes', async () => {
+    const t = await env.service.create('home');
+    env.backend.setState(t.id, 'activating');
+    await env.service.update(t.id, { protocol: 'http2' });
+    expect(env.backend.calls).toContain(`restart ${t.id}`);
   });
   it('start resets a failing watchdog', async () => {
     const t = await env.service.create('home');
