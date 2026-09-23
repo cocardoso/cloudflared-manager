@@ -1,0 +1,10 @@
+node_modules/
+dist/
+release/
+*.log
+.data/
+.e2e-data/
+test-results/
+playwright-report/
+.superpowers/
+.DS_Store
