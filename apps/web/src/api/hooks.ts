@@ -50,7 +50,7 @@ export const useLogout = () => {
 export const useChangePassword = () =>
   useMutation({ mutationFn: (b: { currentPassword: string; newPassword: string }) => api.post('/auth/password', b) });
 export const useConnectCloudflare = () =>
-  useInvalidating((b: { token: string; accountId?: string }) => api.post<CloudflareStatus>('/cloudflare/token', b), [qk.cf, qk.setup, qk.tunnels]);
+  useInvalidating((b: { token: string }) => api.post<CloudflareStatus>('/cloudflare/token', b), [qk.cf, qk.setup, qk.tunnels]);
 export const useCreateTunnel = () => useInvalidating((name: string) => api.post<TunnelSummary>('/tunnels', { name }), [qk.tunnels, qk.events()]);
 export const useUpdateTunnel = (id: string) =>
   useInvalidating((b: UpdateTunnel) => api.patch<TunnelSummary>(`/tunnels/${id}`, b), [qk.tunnels, qk.tunnel(id), qk.events(id)]);

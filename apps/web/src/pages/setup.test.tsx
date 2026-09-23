@@ -60,28 +60,28 @@ describe('SetupPage', () => {
     expect(screen.getByText(/Cloudflare: 10000 Authentication error/)).toBeTruthy();
   });
 
-  it('asks to choose an account when the token has several', async () => {
+  it('connects to every account the token reaches', async () => {
     let connected = false;
     const calls = mockApi({
       'GET /api/setup/status': () => json({ adminCreated: true, cloudflareConnected: connected }),
       'GET /api/auth/me': () => json({ username: 'admin' }),
-      'POST /api/cloudflare/token': (init) => {
-        const b = JSON.parse(String(init!.body));
-        if (!b.accountId) {
-          return json({ code: 'ACCOUNT_SELECTION_REQUIRED', message: 'x', details: { accounts: [{ id: 'a'.repeat(32), name: 'Home' }, { id: 'b'.repeat(32), name: 'Work' }] } }, 409);
-        }
+      'POST /api/cloudflare/token': () => {
         connected = true;
-        return json({ connected: true, accountId: b.accountId, accountName: 'Home', tokenSuffix: 'abcd', zones: [{ id: '1', name: 'example.com' }] });
+        return json({
+          connected: true, tokenSuffix: 'abcd', lastAccountId: null,
+          accounts: [
+            { id: 'a'.repeat(32), name: 'UPCAST', zones: [{ id: '1', name: 'upcast.com' }] },
+            { id: 'b'.repeat(32), name: 'INTERCASE', zones: [{ id: '2', name: 'cloudhub.com.br' }, { id: '3', name: 'intercase.com' }] },
+          ],
+        });
       },
     });
     renderWithProviders(<SetupPage />);
     await userEvent.type(await screen.findByLabelText('API token'), 'x'.repeat(40));
+    expect(screen.queryByRole('combobox', { name: 'Account' })).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
-    expect(await screen.findByText('This token has access to several accounts. Choose one.')).toBeTruthy();
-    await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
-    expect(await screen.findByText('Connected to Home')).toBeTruthy();
-    expect(screen.getByText('1 domain found')).toBeTruthy();
-    const posts = calls.filter((c) => c.key === 'POST /api/cloudflare/token');
-    await waitFor(() => expect(posts.at(-1)!.body).toMatchObject({ accountId: 'a'.repeat(32) }));
+    expect(await screen.findByText('Connected to 2 accounts')).toBeTruthy();
+    expect(screen.getByText('UPCAST, INTERCASE · 3 domains')).toBeTruthy();
+    expect(calls.find((c) => c.key === 'POST /api/cloudflare/token')!.body).toEqual({ token: 'x'.repeat(40) });
   });
 });

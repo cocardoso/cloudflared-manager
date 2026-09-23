@@ -30,21 +30,22 @@ function AccountSection() {
       <ErrorBanner error={cf.error} />
       {d && (
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex flex-col gap-1">
-            <Text bold>{d.accountName}</Text>
-            <Text variant="secondary" size="sm">{t('settings.tokenEnding', { suffix: d.tokenSuffix })}</Text>
-          </div>
+          <Text variant="secondary" size="sm">{t('settings.tokenEnding', { suffix: d.tokenSuffix })}</Text>
           <Button onClick={() => setReplacing(true)}>{t('settings.replaceToken')}</Button>
         </div>
       )}
-      {!!d?.zones.length && (
-        <div className="flex flex-col gap-2">
-          <Text variant="secondary" size="sm">{t('settings.domains')}</Text>
-          <div className="flex flex-wrap gap-1.5">
-            {d.zones.map((z) => <Badge key={z.id} variant="neutral">{z.name}</Badge>)}
-          </div>
+      {d?.accounts.map((a) => (
+        <div key={a.id} data-account={a.id} className="flex flex-col gap-2">
+          <Text bold>{a.name}</Text>
+          {a.zones.length ? (
+            <div className="flex flex-wrap gap-1.5">
+              {a.zones.map((z) => <Badge key={z.id} variant="neutral">{z.name}</Badge>)}
+            </div>
+          ) : (
+            <Text variant="secondary" size="sm">{t('settings.noDomains')}</Text>
+          )}
         </div>
-      )}
+      ))}
       <Dialog.Root open={replacing} onOpenChange={setReplacing}>
         <Dialog className="p-6" size="lg">
           <div className="flex flex-col gap-4">

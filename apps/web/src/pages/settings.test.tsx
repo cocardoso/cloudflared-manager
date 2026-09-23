@@ -6,7 +6,13 @@ import { json, mockApi, renderWithProviders } from '../test/utils';
 import { SettingsPage } from './settings';
 
 const routes = {
-  'GET /api/cloudflare/status': () => json({ connected: true, accountId: 'a', accountName: 'Home Lab', tokenSuffix: 'abcd', zones: [{ id: '1', name: 'example.com' }] }),
+  'GET /api/cloudflare/status': () => json({
+    connected: true, tokenSuffix: 'abcd', lastAccountId: null,
+    accounts: [
+      { id: 'a'.repeat(32), name: 'Home Lab', zones: [{ id: '1', name: 'example.com' }] },
+      { id: 'b'.repeat(32), name: 'Second Org', zones: [{ id: '2', name: 'second.net' }] },
+    ],
+  }),
   'GET /api/system/cloudflared': () => json({ installed: '2026.9.1', latest: '2026.10.0', updateAvailable: true, canSelfUpdate: true }),
   'POST /api/system/cloudflared/update': () => json({ installed: '2026.10.0', latest: '2026.10.0', updateAvailable: false }),
 };
@@ -20,12 +26,14 @@ afterEach(async () => {
 });
 
 describe('SettingsPage', () => {
-  it('shows account, token suffix and domains', async () => {
+  it('shows every account with its domains and the token suffix', async () => {
     mockApi(routes);
     renderWithProviders(<SettingsPage />);
     expect(await screen.findByText('Token ending in abcd')).toBeTruthy();
-    expect(screen.getByText('Home Lab')).toBeTruthy();
-    expect(screen.getByText('example.com')).toBeTruthy();
+    const home = screen.getByText('Home Lab').closest('[data-account]') as HTMLElement;
+    expect(home.textContent).toContain('example.com');
+    expect(home.textContent).not.toContain('second.net');
+    expect((screen.getByText('Second Org').closest('[data-account]') as HTMLElement).textContent).toContain('second.net');
   });
   it('updates cloudflared', async () => {
     const calls = mockApi(routes);

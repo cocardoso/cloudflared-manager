@@ -64,9 +64,9 @@
     "CF_RATE_LIMITED": "Limite de requisições da Cloudflare atingido. Aguarde um minuto e tente de novo.",
     "CF_API_ERROR": "A Cloudflare retornou um erro.",
     "CF_NOT_CONNECTED": "Conecte sua conta da Cloudflare primeiro.",
-    "ACCOUNT_SELECTION_REQUIRED": "Este token tem acesso a várias contas. Escolha uma.",
+    "ACCOUNT_SELECTION_REQUIRED": "Escolha a conta deste túnel.",
     "DNS_CONFLICT": "Já existe um registro DNS para este hostname.",
-    "ZONE_NOT_FOUND": "Este hostname não pertence a nenhum domínio da sua conta Cloudflare.",
+    "ZONE_NOT_FOUND": "Este hostname não pertence a nenhum domínio da conta Cloudflare deste túnel.",
     "CONFIG_VERSION_CONFLICT": "As rotas foram alteradas em outro lugar (ex.: no painel da Cloudflare). Recarregue e tente de novo.",
     "TUNNEL_NOT_FOUND": "Túnel não encontrado.",
     "TUNNEL_NOT_MANAGED": "Este túnel não roda neste host. Execute-o aqui primeiro.",
@@ -79,9 +79,10 @@
     "RATE_LIMITED": "Muitas tentativas. Aguarde um minuto.",
     "INTERNAL": "Erro inesperado.",
     "DNS_RECORD_NOT_FOUND": "O registro DNS não existe mais.",
-    "CF_PERMISSION_MISSING_ACCOUNT": "O token não consegue usar {{permission}} na conta \"{{account}}\". Escolha outra conta ou verifique se o seu papel nessa conta inclui Cloudflare Tunnel.",
+    "CF_PERMISSION_MISSING_ACCOUNT": "O token não consegue usar {{permission}} na conta \"{{account}}\". Verifique se o seu papel nessa conta inclui Cloudflare Tunnel.",
     "cloudflareSaid": "Cloudflare: {{detail}}",
-    "CLOUDFLARED_UPDATE_UNSUPPORTED": "O cloudflared vem dentro da imagem Docker e é atualizado a cada nova versão da imagem. Baixe a imagem mais recente e recrie o container para recebê-lo."
+    "CLOUDFLARED_UPDATE_UNSUPPORTED": "O cloudflared vem dentro da imagem Docker e é atualizado a cada nova versão da imagem. Baixe a imagem mais recente e recrie o container para recebê-lo.",
+    "ACCOUNT_NOT_FOUND": "Esta conta Cloudflare não está acessível com o token atual."
   },
   "setup": {
     "title": "Boas-vindas",
@@ -103,11 +104,11 @@
     "allZones": "Recursos de zona: Todas as zonas",
     "token": "Token de API",
     "connect": "Conectar",
-    "chooseAccount": "Conta",
-    "connected": "Conectado a {{account}}",
-    "zonesFound_one": "{{count}} domínio encontrado",
-    "zonesFound_other": "{{count}} domínios encontrados",
-    "finish": "Ir para o painel"
+    "finish": "Ir para o painel",
+    "connectedAccounts_one": "Conectado a {{count}} conta",
+    "connectedAccounts_other": "Conectado a {{count}} contas",
+    "accountsSummary_one": "{{accounts}} · {{count}} domínio",
+    "accountsSummary_other": "{{accounts}} · {{count}} domínios"
   },
   "login": {
     "title": "Entrar",
@@ -244,7 +245,7 @@
   "settings": {
     "title": "Configurações",
     "subtitle": "Conta, segurança e manutenção.",
-    "account": "Conta Cloudflare",
+    "account": "Contas Cloudflare",
     "tokenEnding": "Token terminado em {{suffix}}",
     "replaceToken": "Trocar token",
     "domains": "Domínios",
@@ -269,7 +270,8 @@
     "import": "Importar",
     "imported": "Backup importado",
     "backupHint": "Contém as configurações dos túneis e a posse dos registros DNS. O token da Cloudflare nunca é exportado.",
-    "imageUpdateHint": "O cloudflared vem dentro da imagem Docker e é atualizado a cada nova versão da imagem. Baixe a imagem mais recente e recrie o container para recebê-lo."
+    "imageUpdateHint": "O cloudflared vem dentro da imagem Docker e é atualizado a cada nova versão da imagem. Baixe a imagem mais recente e recrie o container para recebê-lo.",
+    "noDomains": "Nenhum domínio nesta conta"
   },
   "events": {
     "created": "Criado",
