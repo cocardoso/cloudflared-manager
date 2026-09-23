@@ -10,6 +10,13 @@ describe('route model', () => {
     expect(f).toMatchObject({ subdomain: 'ha', zone: 'example.com', type: 'https', target: '10.0.0.5:8123', noTLSVerify: true });
     expect(formToRoute(f)).toEqual(r);
   });
+  it('converts timeouts to seconds and keeps unknown origin options when editing', () => {
+    const original = { hostname: 'a.example.com', service: 'https://10.0.0.1:443', originRequest: { http2Origin: true, connectTimeout: 30 } };
+    const f = routeToForm(original, zones);
+    expect(f.connectTimeout).toBe('30');
+    expect(formToRoute({ ...f, keepAliveTimeout: '90' }, original).originRequest).toEqual({ http2Origin: true, connectTimeout: 30, keepAliveTimeout: 90 });
+    expect(formToRoute({ ...f, connectTimeout: '' }, original).originRequest).toEqual({ http2Origin: true });
+  });
   it('uses the longest zone and supports apex hostnames', () => {
     expect(routeToForm({ hostname: 'x.sub.example.com', service: 'http://a:1' }, zones)).toMatchObject({ subdomain: 'x', zone: 'sub.example.com' });
     expect(routeToForm({ hostname: 'example.com', service: 'http://a:1' }, zones)).toMatchObject({ subdomain: '', zone: 'example.com' });

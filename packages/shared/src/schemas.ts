@@ -10,15 +10,17 @@ const serviceSchema = z.string().trim().refine(
   'unsupported service',
 );
 
-const durationSchema = z.string().regex(/^\d+(ms|s|m|h)$/);
+/** Cloudflare's remote-config API expresses timeouts as integer seconds. */
+const secondsSchema = z.number().int().positive().max(86_400);
 
-export const originRequestSchema = z.object({
+// Known keys are validated; any other option set in the Cloudflare dashboard is preserved as-is.
+export const originRequestSchema = z.looseObject({
   noTLSVerify: z.boolean().optional(),
   httpHostHeader: z.string().min(1).optional(),
   originServerName: z.string().min(1).optional(),
-  connectTimeout: durationSchema.optional(),
-  keepAliveTimeout: durationSchema.optional(),
-}).strict();
+  connectTimeout: secondsSchema.optional(),
+  keepAliveTimeout: secondsSchema.optional(),
+});
 
 export const routeSchema = z.object({
   hostname: hostnameSchema,

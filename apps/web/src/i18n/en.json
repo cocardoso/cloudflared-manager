@@ -222,7 +222,7 @@
     "originServerName": "Origin server name",
     "connectTimeout": "Connect timeout",
     "keepAliveTimeout": "Keep-alive timeout",
-    "durationHint": "e.g. 30s, 2m",
+    "durationHint": "in seconds",
     "conflictTitle": "DNS record already exists",
     "conflictDescription": "{{hostnames}} already point somewhere else. Replace with a record pointing to this tunnel?",
     "overwrite": "Replace DNS record",

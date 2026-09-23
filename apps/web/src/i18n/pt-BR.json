@@ -222,7 +222,7 @@
     "originServerName": "Nome do servidor de origem",
     "connectTimeout": "Timeout de conexão",
     "keepAliveTimeout": "Timeout de keep-alive",
-    "durationHint": "ex.: 30s, 2m",
+    "durationHint": "em segundos",
     "conflictTitle": "O registro DNS já existe",
     "conflictDescription": "{{hostnames}} já apontam para outro destino. Substituir por um registro apontando para este túnel?",
     "overwrite": "Substituir registro DNS",

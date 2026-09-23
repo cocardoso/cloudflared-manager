@@ -37,7 +37,7 @@ export function RouteFormDialog({ open, onOpenChange, zones, initial, saving, on
 
   const build = () => {
     try {
-      return formToRoute(v);
+      return formToRoute(v, initial);
     } catch {
       return null;
     }
@@ -129,8 +129,8 @@ export function RouteFormDialog({ open, onOpenChange, zones, initial, saving, on
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Input label={t('routes.httpHostHeader')} value={v.httpHostHeader} onChange={(e) => set('httpHostHeader', e.target.value)} />
                     <Input label={t('routes.originServerName')} value={v.originServerName} onChange={(e) => set('originServerName', e.target.value)} />
-                    <Input label={t('routes.connectTimeout')} description={t('routes.durationHint')} value={v.connectTimeout} onChange={(e) => set('connectTimeout', e.target.value)} />
-                    <Input label={t('routes.keepAliveTimeout')} description={t('routes.durationHint')} value={v.keepAliveTimeout} onChange={(e) => set('keepAliveTimeout', e.target.value)} />
+                    <Input label={t('routes.connectTimeout')} description={t('routes.durationHint')} type="number" min={1} value={v.connectTimeout} onChange={(e) => set('connectTimeout', e.target.value)} />
+                    <Input label={t('routes.keepAliveTimeout')} description={t('routes.durationHint')} type="number" min={1} value={v.keepAliveTimeout} onChange={(e) => set('keepAliveTimeout', e.target.value)} />
                   </div>
                 </div>
               </Collapsible.DefaultPanel>

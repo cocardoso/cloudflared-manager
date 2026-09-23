@@ -22,8 +22,15 @@ describe('routeSchema', () => {
   });
   it('accepts path and originRequest options', () => {
     const r = routeSchema.parse({ hostname: 'a.example.com', path: '^/api', service: 'https://10.0.0.2',
-      originRequest: { noTLSVerify: true, httpHostHeader: 'x', originServerName: 'y', connectTimeout: '10s', keepAliveTimeout: '90s' } });
+      originRequest: { noTLSVerify: true, httpHostHeader: 'x', originServerName: 'y', connectTimeout: 10, keepAliveTimeout: 90 } });
     expect(r.originRequest?.noTLSVerify).toBe(true);
+  });
+  it('uses integer seconds for timeouts, like the Cloudflare API', () => {
+    expect(() => routeSchema.parse({ hostname: 'a.example.com', service: 'http://a:1', originRequest: { connectTimeout: '30s' } })).toThrow();
+  });
+  it('keeps origin options set in the Cloudflare dashboard that the form does not know', () => {
+    const r = routeSchema.parse({ hostname: 'a.example.com', service: 'https://a:1', originRequest: { http2Origin: true, caPool: '/ca.pem' } });
+    expect(r.originRequest).toEqual({ http2Origin: true, caPool: '/ca.pem' });
   });
 });
 

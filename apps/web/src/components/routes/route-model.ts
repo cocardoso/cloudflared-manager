@@ -38,28 +38,36 @@ export function routeToForm(r: Route, zones: Zone[]): RouteFormValues {
     noTLSVerify: !!o.noTLSVerify,
     httpHostHeader: o.httpHostHeader ?? '',
     originServerName: o.originServerName ?? '',
-    connectTimeout: o.connectTimeout ?? '',
-    keepAliveTimeout: o.keepAliveTimeout ?? '',
+    connectTimeout: o.connectTimeout ? String(o.connectTimeout) : '',
+    keepAliveTimeout: o.keepAliveTimeout ? String(o.keepAliveTimeout) : '',
   };
 }
+
+const FORM_KEYS = ['noTLSVerify', 'httpHostHeader', 'originServerName', 'connectTimeout', 'keepAliveTimeout'];
+const seconds = (v: string) => (v.trim() ? Number(v.trim()) : undefined);
 
 export function hostnameOf(v: Pick<RouteFormValues, 'subdomain' | 'zone'>) {
   const sub = v.subdomain.trim().toLowerCase();
   return sub ? `${sub}.${v.zone}` : v.zone;
 }
 
-/** Validates with the shared schema; throws a ZodError on invalid input. */
-export function formToRoute(v: RouteFormValues): Route {
+/**
+ * Validates with the shared schema; throws a ZodError on invalid input.
+ * When editing, origin options the form does not manage are carried over from `original`.
+ */
+export function formToRoute(v: RouteFormValues, original?: Route | null): Route {
   const target = v.target.trim().replace(/^[a-z_]+:(\/\/)?/i, '');
   if (!target) throw new Error('missing target');
   const service = v.type === 'unix' ? `unix:${target}` : v.type === 'http_status' ? `http_status:${target}` : `${v.type}://${target}`;
+  const preserved = Object.fromEntries(Object.entries(original?.originRequest ?? {}).filter(([k]) => !FORM_KEYS.includes(k)));
   const originRequest = Object.fromEntries(
     Object.entries({
+      ...preserved,
       noTLSVerify: v.noTLSVerify || undefined,
       httpHostHeader: v.httpHostHeader.trim() || undefined,
       originServerName: v.originServerName.trim() || undefined,
-      connectTimeout: v.connectTimeout.trim() || undefined,
-      keepAliveTimeout: v.keepAliveTimeout.trim() || undefined,
+      connectTimeout: seconds(v.connectTimeout),
+      keepAliveTimeout: seconds(v.keepAliveTimeout),
     }).filter(([, x]) => x !== undefined),
   );
   return routeSchema.parse({
