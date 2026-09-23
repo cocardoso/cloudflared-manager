@@ -1,8 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type {
-  CloudflareStatus, CloudflaredVersionInfo, MetricsSnapshot, OriginTestResult, Route, SetupStatus,
-  TunnelDetail, TunnelEvent, TunnelSummary, UpdateTunnel,
-} from '@tm/shared';
+import type { CloudflareStatus, CloudflaredVersionInfo, MetricsSnapshot, OriginTestResult, Route, SetupStatus, TunnelDetail, TunnelEvent, TunnelList, TunnelSummary, UpdateTunnel } from '@tm/shared';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError } from './client';
 
@@ -22,7 +19,7 @@ export const useMe = (enabled = true) =>
   useQuery({ queryKey: qk.me, queryFn: () => api.get<{ username: string }>('/auth/me'), retry: false, enabled });
 export const useCloudflareStatus = () => useQuery({ queryKey: qk.cf, queryFn: () => api.get<CloudflareStatus>('/cloudflare/status') });
 export const useTunnels = () =>
-  useQuery({ queryKey: qk.tunnels, queryFn: () => api.get<TunnelSummary[]>('/tunnels'), refetchInterval: 10_000 });
+  useQuery({ queryKey: qk.tunnels, queryFn: () => api.get<TunnelList>('/tunnels'), refetchInterval: 10_000 });
 export const useTunnel = (id: string) =>
   useQuery({ queryKey: qk.tunnel(id), queryFn: () => api.get<TunnelDetail>(`/tunnels/${id}`), refetchInterval: 10_000 });
 export const useTunnelEvents = (id: string) =>
@@ -51,7 +48,8 @@ export const useChangePassword = () =>
   useMutation({ mutationFn: (b: { currentPassword: string; newPassword: string }) => api.post('/auth/password', b) });
 export const useConnectCloudflare = () =>
   useInvalidating((b: { token: string }) => api.post<CloudflareStatus>('/cloudflare/token', b), [qk.cf, qk.setup, qk.tunnels]);
-export const useCreateTunnel = () => useInvalidating((name: string) => api.post<TunnelSummary>('/tunnels', { name }), [qk.tunnels, qk.events()]);
+export const useCreateTunnel = () =>
+  useInvalidating((b: { name: string; accountId?: string }) => api.post<TunnelSummary>('/tunnels', b), [qk.tunnels, qk.events(), qk.cf]);
 export const useUpdateTunnel = (id: string) =>
   useInvalidating((b: UpdateTunnel) => api.patch<TunnelSummary>(`/tunnels/${id}`, b), [qk.tunnels, qk.tunnel(id), qk.events(id)]);
 export const useTunnelAction = (id: string) =>

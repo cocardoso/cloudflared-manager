@@ -8,7 +8,7 @@ import { SummaryCards, summarize } from './summary-cards';
 import { TunnelTable } from './tunnel-table';
 
 const base: TunnelSummary = {
-  id: '6ff42ae2-765d-4adf-8112-31c55c1551ef', name: 'home', createdAt: '', remote: true, managedHere: true, edgeStatus: 'healthy',
+  id: '6ff42ae2-765d-4adf-8112-31c55c1551ef', name: 'home', account: { id: 'a'.repeat(32), name: 'Home Lab' }, createdAt: '', remote: true, managedHere: true, edgeStatus: 'healthy',
   connections: [
     { coloName: 'gru01', openedAt: '', originIp: '', clientVersion: '' },
     { coloName: 'eze01', openedAt: '', originIp: '', clientVersion: '' },

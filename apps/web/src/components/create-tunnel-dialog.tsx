@@ -1,25 +1,32 @@
-import { Button, Dialog, Input } from '@cloudflare/kumo';
+import { Button, Dialog, Input, Select } from '@cloudflare/kumo';
 import { createTunnelSchema } from '@tm/shared';
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
-import { useCreateTunnel } from '../api/hooks';
+import { useCloudflareStatus, useCreateTunnel } from '../api/hooks';
 import { ErrorBanner } from './error-banner';
 
 export function CreateTunnelDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const { t } = useTranslation();
   const nav = useNavigate();
   const create = useCreateTunnel();
+  const cf = useCloudflareStatus().data;
+  const accounts = cf?.accounts ?? [];
+  const multi = accounts.length > 1;
   const [name, setName] = useState('');
+  const [picked, setPicked] = useState<string | null>(null);
+  // Start from the account used last; fall back to the first one.
+  const accountId = picked ?? (accounts.some((a) => a.id === cf?.lastAccountId) ? cf!.lastAccountId! : accounts[0]?.id);
   const valid = createTunnelSchema.safeParse({ name }).success;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!valid) return;
-    const tunnel = await create.mutateAsync(name.trim()).catch(() => null);
+    const tunnel = await create.mutateAsync({ name: name.trim(), ...(multi && accountId ? { accountId } : {}) }).catch(() => null);
     if (!tunnel) return;
     onOpenChange(false);
     setName('');
+    setPicked(null);
     nav(`/tunnels/${tunnel.id}?tab=routes`);
   };
 
@@ -28,6 +35,16 @@ export function CreateTunnelDialog({ open, onOpenChange }: { open: boolean; onOp
       <Dialog className="p-6" size="base">
         <form className="flex flex-col gap-4" onSubmit={submit}>
           <Dialog.Title className="text-xl font-semibold">{t('dashboard.createTitle')}</Dialog.Title>
+          {multi && (
+            <Select
+              className="w-full"
+              label={t('dashboard.account')}
+              description={t('dashboard.createAccountHint')}
+              value={accountId}
+              onValueChange={(v) => setPicked(String(v))}
+              items={Object.fromEntries(accounts.map((a) => [a.id, a.name]))}
+            />
+          )}
           <Input
             label={t('dashboard.createName')}
             description={t('dashboard.createNameHint')}

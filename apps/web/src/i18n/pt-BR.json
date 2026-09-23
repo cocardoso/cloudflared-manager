@@ -145,7 +145,11 @@
     "updateAvailable": "Há uma nova versão do cloudflared disponível ({{latest}}; instalada {{installed}}).",
     "updateAction": "Atualizar em Configurações",
     "noMatch": "Nenhum túnel corresponde à busca",
-    "updateActionImage": "Como atualizar"
+    "updateActionImage": "Como atualizar",
+    "account": "Conta",
+    "allAccounts": "Todas as contas",
+    "createAccountHint": "O túnel só pode publicar hostnames em domínios desta conta.",
+    "accountUnavailable": "Não foi possível carregar os túneis de {{account}}: {{reason}}"
   },
   "tunnel": {
     "tabs": {

@@ -26,13 +26,14 @@ function AdoptButton({ id }: { id: string }) {
   );
 }
 
-export function TunnelTable({ tunnels }: { tunnels: TunnelSummary[] }) {
+export function TunnelTable({ tunnels, showAccount = false }: { tunnels: TunnelSummary[]; showAccount?: boolean }) {
   const { t } = useTranslation();
   return (
     <Table>
       <Table.Header>
         <Table.Row>
           <Table.Head>{t('dashboard.name')}</Table.Head>
+          {showAccount && <Table.Head>{t('dashboard.account')}</Table.Head>}
           <Table.Head>{t('dashboard.status')}</Table.Head>
           <Table.Head>{t('dashboard.connections')}</Table.Head>
           <Table.Head>{t('dashboard.routes')}</Table.Head>
@@ -51,6 +52,7 @@ export function TunnelTable({ tunnels }: { tunnels: TunnelSummary[] }) {
                   <Text variant="mono-secondary">{tn.id.slice(0, 8)}</Text>
                 </div>
               </Table.Cell>
+              {showAccount && <Table.Cell>{tn.account.name}</Table.Cell>}
               <Table.Cell>
                 <div className="flex flex-wrap gap-1.5">
                   <StatusBadge kind="edge" value={tn.edgeStatus} />

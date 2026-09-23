@@ -145,7 +145,11 @@
     "updateAvailable": "A new version of cloudflared is available ({{latest}}; installed {{installed}}).",
     "updateAction": "Update in Settings",
     "noMatch": "No tunnels match your search",
-    "updateActionImage": "How to update"
+    "updateActionImage": "How to update",
+    "account": "Account",
+    "allAccounts": "All accounts",
+    "createAccountHint": "The tunnel can only publish hostnames on domains of this account.",
+    "accountUnavailable": "Could not load tunnels from {{account}}: {{reason}}"
   },
   "tunnel": {
     "tabs": {
