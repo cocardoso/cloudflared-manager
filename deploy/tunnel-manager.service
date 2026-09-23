@@ -1,0 +1,21 @@
+[Unit]
+Description=Cloudflared Manager web UI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tunnelmgr
+Group=tunnelmgr
+Environment=NODE_ENV=production
+Environment=PORT=8080
+Environment=DATA_DIR=/var/lib/tunnel-manager
+Environment=ETC_DIR=/etc/tunnel-manager
+Environment=WEB_DIST=/opt/tunnel-manager/web
+EnvironmentFile=-/etc/tunnel-manager/manager.env
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning /opt/tunnel-manager/server.mjs
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

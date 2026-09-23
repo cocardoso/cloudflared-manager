@@ -1,0 +1,22 @@
+[Unit]
+Description=Cloudflare Tunnel %i (managed by cloudflared-manager)
+After=network-online.target
+Wants=network-online.target
+# Never give up restarting during long internet outages.
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+TimeoutStartSec=0
+EnvironmentFile=/etc/tunnel-manager/tunnels/%i.env
+ExecStart=/usr/bin/cloudflared --no-autoupdate tunnel run
+Restart=always
+RestartSec=5
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

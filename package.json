@@ -1,0 +1,20 @@
+{
+  "name": "cloudflared-manager",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "dev": "pnpm --parallel --filter @tm/server --filter @tm/web dev",
+    "e2e": "playwright test",
+    "dev:fake-cf": "FAKE_CF_PORT=18787 pnpm --filter @tm/server exec tsx test/fake-cf-server.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "@playwright/test": "^1.63.0"
+  }
+}

@@ -1,0 +1,24 @@
+name: release
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: bash scripts/package-release.sh "${GITHUB_REF_NAME}"
+      - run: gh release create "${GITHUB_REF_NAME}" "release/cloudflared-manager-${GITHUB_REF_NAME}.tar.gz" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}

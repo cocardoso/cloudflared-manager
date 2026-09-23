@@ -1,0 +1,11 @@
+# Installed as /etc/sudoers.d/tunnel-manager (mode 0440). Requires sudo >= 1.9.10 (Debian 13 ships 1.9.16).
+# Arguments are anchored regular expressions: plain wildcards would also match extra
+# arguments (e.g. a second unit path) and let tunnelmgr escalate to root.
+Cmnd_Alias TM_UNITS = /usr/bin/systemctl ^--no-block (start|stop|restart) cloudflared@[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.service$, \
+                      /usr/bin/systemctl ^enable cloudflared@[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.service$, \
+                      /usr/bin/systemctl ^disable --now cloudflared@[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.service$, \
+                      /usr/bin/journalctl ^-u cloudflared@[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.service -o json -n [0-9]{1\,4} --no-pager$, \
+                      /usr/bin/journalctl ^-u cloudflared@[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.service -o json -n 0 -f --no-pager$
+Cmnd_Alias TM_APT = /usr/bin/apt-get ^update -qq$, \
+                    /usr/bin/apt-get ^install --only-upgrade -y cloudflared$
+tunnelmgr ALL=(root) NOPASSWD: TM_UNITS, TM_APT
