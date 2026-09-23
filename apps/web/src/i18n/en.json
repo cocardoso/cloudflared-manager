@@ -81,7 +81,7 @@
     "DNS_RECORD_NOT_FOUND": "The DNS record no longer exists.",
     "CF_PERMISSION_MISSING_ACCOUNT": "The token cannot use {{permission}} on account \"{{account}}\". Pick another account, or check that your role in that account includes Cloudflare Tunnel.",
     "cloudflareSaid": "Cloudflare: {{detail}}",
-    "CLOUDFLARED_UPDATE_UNSUPPORTED": "cloudflared is bundled in the Docker image. Pull the latest image and recreate the container to update it."
+    "CLOUDFLARED_UPDATE_UNSUPPORTED": "cloudflared is bundled in the Docker image and updated with each new image release. Pull the latest image and recreate the container to get it."
   },
   "setup": {
     "title": "Welcome",
@@ -269,7 +269,7 @@
     "import": "Import",
     "imported": "Backup imported",
     "backupHint": "Contains tunnel settings and DNS ownership. The Cloudflare token is never exported.",
-    "imageUpdateHint": "cloudflared is bundled in the Docker image. Pull the latest image and recreate the container to update it."
+    "imageUpdateHint": "cloudflared is bundled in the Docker image and updated with each new image release. Pull the latest image and recreate the container to get it."
   },
   "events": {
     "created": "Created",

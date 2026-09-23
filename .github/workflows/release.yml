@@ -4,12 +4,13 @@ on:
     tags: ['v*']
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 jobs:
   tarball:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -25,7 +26,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
   image:
+    # Only publish an image for a tag whose tests passed.
+    needs: tarball
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3

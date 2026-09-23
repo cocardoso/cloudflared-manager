@@ -81,7 +81,7 @@
     "DNS_RECORD_NOT_FOUND": "O registro DNS não existe mais.",
     "CF_PERMISSION_MISSING_ACCOUNT": "O token não consegue usar {{permission}} na conta \"{{account}}\". Escolha outra conta ou verifique se o seu papel nessa conta inclui Cloudflare Tunnel.",
     "cloudflareSaid": "Cloudflare: {{detail}}",
-    "CLOUDFLARED_UPDATE_UNSUPPORTED": "O cloudflared vem dentro da imagem Docker. Baixe a imagem mais recente e recrie o container para atualizar."
+    "CLOUDFLARED_UPDATE_UNSUPPORTED": "O cloudflared vem dentro da imagem Docker e é atualizado a cada nova versão da imagem. Baixe a imagem mais recente e recrie o container para recebê-lo."
   },
   "setup": {
     "title": "Boas-vindas",
@@ -269,7 +269,7 @@
     "import": "Importar",
     "imported": "Backup importado",
     "backupHint": "Contém as configurações dos túneis e a posse dos registros DNS. O token da Cloudflare nunca é exportado.",
-    "imageUpdateHint": "O cloudflared vem dentro da imagem Docker. Baixe a imagem mais recente e recrie o container para atualizar."
+    "imageUpdateHint": "O cloudflared vem dentro da imagem Docker e é atualizado a cada nova versão da imagem. Baixe a imagem mais recente e recrie o container para recebê-lo."
   },
   "events": {
     "created": "Criado",

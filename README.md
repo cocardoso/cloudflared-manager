@@ -48,9 +48,11 @@ docker run -d --name cloudflared-manager --restart unless-stopped \
 
 The UI is at `http://<docker-host>:8080`. All state (database, encryption key, tunnel credentials) lives in the `/data` volume — back it up and keep it private.
 
+The container runs as uid `10001`. Named volumes (as above) get the right owner automatically; for a bind mount, create the directory first and hand it over: `mkdir -p ./data && sudo chown 10001:10001 ./data`, then use `-v ./data:/data`.
+
 **Networking:** inside the container `127.0.0.1` is the container itself. Point routes at LAN addresses (`http://192.168.1.10:8123`), at another Compose service by name (`http://homeassistant:8123`), or at the Docker host (`http://host.docker.internal:8080` on Docker Desktop, the host's LAN IP on Linux). On Linux you can also use `network_mode: host` (commented out in the compose file) so `127.0.0.1` means the host.
 
-**Update:** `docker compose pull && docker compose up -d`. Tunnels are restarted with the new image and come back automatically; tunnels you stopped stay stopped.
+**Update:** `docker compose pull && docker compose up -d`. Tunnels are restarted with the new image and come back automatically; tunnels you stopped stay stopped. `cloudflared` is bundled in the image: a scheduled workflow opens a pull request whenever Cloudflare ships a new version, and the next release carries it.
 
 Images are multi-arch (`linux/amd64`, `linux/arm64`) and tagged `latest`, `<major>.<minor>` and `<version>`.
 
@@ -108,11 +110,13 @@ Omit `CF_API_BASE` to use the real API. The `fake` backend (the `pnpm dev` defau
 | `pnpm e2e` | Full browser flow (Playwright) against the fake Cloudflare API |
 | `docker build -t cloudflared-manager:dev .` | Builds the Docker image locally |
 | `bash scripts/package-release.sh v0.2.0` | Builds the Proxmox release tarball into `release/` |
-| `bash scripts/set-repo.sh owner/repo` | Points the Proxmox scripts at a fork |
+| `bash scripts/set-repo.sh owner/repo` | Points the scripts, compose file and README at a fork |
 
 ### Releasing
 
-`git tag vX.Y.Z && git push --tags` runs the `release` workflow: it publishes the Proxmox tarball as a GitHub Release (downloaded by the installer) and pushes the multi-arch image to `ghcr.io/cocardoso/cloudflared-manager`.
+`git tag vX.Y.Z && git push --tags` runs the `release` workflow: after the tests pass it publishes the Proxmox tarball as a GitHub Release (downloaded by the installer) and pushes the multi-arch image to `ghcr.io/cocardoso/cloudflared-manager`.
+
+The first time an image is pushed, GitHub creates the package as **private**; make it public once under *Package settings → Change visibility* so anonymous `docker pull` works.
 
 ## Layout
 
