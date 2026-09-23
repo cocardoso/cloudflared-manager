@@ -102,6 +102,7 @@
     "permTunnel": "Conta → Cloudflare Tunnel → Editar",
     "permDns": "Zona → DNS → Editar",
     "permZone": "Zona → Zona → Ler",
+    "permAccount": "Conta → Configurações da conta → Ler",
     "allZones": "Recursos de zona: Todas as zonas",
     "token": "Token de API",
     "connect": "Conectar",
