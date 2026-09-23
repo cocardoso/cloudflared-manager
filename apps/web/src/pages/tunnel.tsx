@@ -1,8 +1,8 @@
-import { Banner, Breadcrumbs, Button, Loader, Tabs, Toast } from '@cloudflare/kumo';
+import { Badge, Banner, Breadcrumbs, Button, Loader, Tabs, Toast } from '@cloudflare/kumo';
 import { ArrowClockwiseIcon, PlayIcon, StopIcon } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import { useParams, useSearchParams } from 'react-router';
-import { useErrorMessage, useTunnel, useTunnelAction } from '../api/hooks';
+import { useCloudflareStatus, useErrorMessage, useTunnel, useTunnelAction } from '../api/hooks';
 import { ErrorBanner } from '../components/error-banner';
 import { PageHeader } from '../components/page-header';
 import { RoutesTab } from '../components/routes/routes-tab';
@@ -20,6 +20,7 @@ export function TunnelPage() {
   const { id = '' } = useParams();
   const [params, setParams] = useSearchParams();
   const tunnel = useTunnel(id);
+  const multiAccount = (useCloudflareStatus().data?.accounts.length ?? 0) > 1;
   const action = useTunnelAction(id);
   const toasts = Toast.useToastManager();
   const msg = useErrorMessage();
@@ -73,6 +74,7 @@ export function TunnelPage() {
             <StatusBadge kind="edge" value={d.edgeStatus} />
             <StatusBadge kind="local" value={d.local} />
             {d.managedHere && <StatusBadge kind="watchdog" value={d.watchdog} />}
+            {multiAccount && d.account.name && <Badge variant="neutral">{d.account.name}</Badge>}
           </div>
         }
         actions={actions}

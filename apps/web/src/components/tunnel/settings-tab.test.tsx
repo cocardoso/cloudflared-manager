@@ -10,7 +10,7 @@ import { SettingsTab } from './settings-tab';
 
 const ID = '6ff42ae2-765d-4adf-8112-31c55c1551ef';
 const tunnel: TunnelDetail = {
-  id: ID, name: 'home', createdAt: '', remote: true, managedHere: true, edgeStatus: 'healthy', connections: [],
+  id: ID, name: 'home', account: { id: 'a'.repeat(32), name: 'Home Lab' }, createdAt: '', remote: true, managedHere: true, edgeStatus: 'healthy', connections: [],
   local: 'active', activeSince: null, watchdog: 'healthy', routeCount: 0,
   settings: { keepAlive: true, toleranceMinutes: 2, logLevel: 'info', protocol: 'auto', metricsPort: 20241 },
   routes: [], configVersion: 1,
