@@ -2,6 +2,7 @@
   "name": "@tm/server",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "SERVICE_BACKEND=fake DATA_DIR=.data ETC_DIR=.data/etc node --disable-warning=ExperimentalWarning --import tsx --watch src/main.ts",

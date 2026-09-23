@@ -1,6 +1,6 @@
 # Cloudflared Manager
 
-> An independent project, **not affiliated with or supported by Cloudflare, Inc.** See [Disclaimer](#disclaimer).
+> An independent open-source project, **not affiliated with or supported by Cloudflare, Inc.** See [Disclaimer](#disclaimer).
 
 A web UI to create and run **Cloudflare Tunnels** in your homelab. Deploy it as a **Proxmox LXC** (one command, [community-scripts](https://community-scripts.org/scripts/cloudflared) style) or as a **Docker container**. Configure everything from the browser, close the page, and your tunnels stay connected — nothing runs on your desktop.
 
@@ -157,8 +157,12 @@ docs/               designs, plans and the manual test checklist
 - Tunnels configured with a local `config.yml` are shown read-only.
 - A single admin user.
 
+## License
+
+[MIT](LICENSE) © 2026 Cesar Cardoso.
+
 ## Disclaimer
 
-Cloudflared Manager is an independent project. It is **not affiliated with, endorsed, sponsored or supported by Cloudflare, Inc.** Do not contact Cloudflare support about this app; report issues in this repository instead.
+Cloudflared Manager is an independent open-source project. It is **not affiliated with, endorsed, sponsored or supported by Cloudflare, Inc.** Do not contact Cloudflare support about this app; report issues in this repository instead.
 
 Cloudflare, the Cloudflare logo, Cloudflare Tunnel and `cloudflared` are trademarks of Cloudflare, Inc., used here only to describe what the app works with. The UI is built with [Kumo](https://www.npmjs.com/package/@cloudflare/kumo), Cloudflare's open-source design system, under its own license; the `cloudflared` binary is downloaded from Cloudflare and distributed under its license.

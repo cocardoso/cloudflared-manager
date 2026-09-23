@@ -2,7 +2,7 @@
   "app": {
     "name": "Cloudflared Manager",
     "tagline": "Tunnels for your homelab",
-    "disclaimer": "Cloudflared Manager is an independent project, not affiliated with, endorsed or supported by Cloudflare, Inc. Cloudflare, the Cloudflare logo and Cloudflare Tunnel are trademarks of Cloudflare, Inc."
+    "disclaimer": "Cloudflared Manager is an independent open-source project, not affiliated with, endorsed or supported by Cloudflare, Inc. Cloudflare, the Cloudflare logo and Cloudflare Tunnel are trademarks of Cloudflare, Inc."
   },
   "nav": {
     "dashboard": "Dashboard",
