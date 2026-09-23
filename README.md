@@ -1,90 +1,90 @@
-# Cloudflared Manager para Proxmox
+# Cloudflared Manager for Proxmox
 
-Script no estilo [community-scripts](https://community-scripts.org/scripts/cloudflared) que cria um LXC no Proxmox com o `cloudflared` **e** uma interface web para gerenciar túneis da Cloudflare. Você configura pelo navegador, fecha a página, e os túneis continuam conectados, sem nada rodando no seu desktop.
+A [community-scripts](https://community-scripts.org/scripts/cloudflared)-style script that creates a Proxmox LXC with `cloudflared` **and** a web UI to manage Cloudflare Tunnels. Configure everything from the browser, close the page, and your tunnels stay connected — nothing runs on your desktop.
 
-- Cria, para, reinicia, edita e exclui túneis (gerenciados remotamente pela API da Cloudflare).
-- Publica serviços da sua rede em **qualquer domínio da sua conta** (`app.dominio-a.com`, `git.dominio-b.dev`…), com criação e remoção automática do CNAME.
-- **Keep-alive** por túnel: o túnel se recupera sozinho de queda de processo, de internet ou de reboot.
-- Logs ao vivo, histórico de eventos, conexões com a borda e gráfico de tráfego.
-- Interface em **português e inglês**, no mesmo design system do painel da Cloudflare ([Kumo](https://www.npmjs.com/package/@cloudflare/kumo)).
+- Create, stop, restart, edit and delete tunnels (remotely managed through the Cloudflare API).
+- Publish services from your network under **any domain in your account** (`app.domain-a.com`, `git.domain-b.dev`…), with automatic CNAME creation and removal.
+- Per-tunnel **keep-alive**: a tunnel recovers on its own from process crashes, internet outages and reboots.
+- Live logs, event history, edge connections and a traffic chart.
+- UI in **English and Portuguese (Brazil)**, built with the Cloudflare dashboard design system ([Kumo](https://www.npmjs.com/package/@cloudflare/kumo)).
 
-## Instalação
+## Installation
 
-Na shell do **host** Proxmox:
+In the Proxmox **host** shell:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/cocardoso/cloudflared-proxmox/main/ct/cloudflared-manager.sh)"
 ```
 
-Padrões do container (ajustáveis nos menus do instalador): Debian 13, 1 vCPU, 1 GB de RAM, 4 GB de disco, não-privilegiado, x86-64 e ARM64.
+Container defaults (adjustable in the installer menus): Debian 13, 1 vCPU, 1 GB RAM, 4 GB disk, unprivileged, x86-64 and ARM64.
 
-No fim, o instalador mostra o endereço da interface: `http://<ip-do-lxc>:8080`.
+When it finishes, the installer prints the UI address: `http://<lxc-ip>:8080`.
 
-## Primeiro acesso
+## First access
 
-1. **Crie o administrador** (senha com pelo menos 12 caracteres).
-2. **Conecte a Cloudflare**: clique em **Criar token na Cloudflare**. O painel abre com as permissões já preenchidas; é só confirmar, copiar o token e colar. Isso é feito uma única vez. Permissões usadas:
-   - Conta → Cloudflare Tunnel → Editar
-   - Zona → DNS → Editar
-   - Zona → Zona → Ler
-   - Recursos de zona: todas as zonas
+1. **Create the admin** (password with at least 12 characters).
+2. **Connect Cloudflare**: click **Create token in Cloudflare**. The dashboard opens with the permissions already filled in; confirm, copy the token and paste it. You only do this once. Permissions used:
+   - Account → Cloudflare Tunnel → Edit
+   - Zone → DNS → Edit
+   - Zone → Zone → Read
+   - Zone resources: all zones
 
-   Se o token tiver acesso a várias contas, a interface pede para você escolher uma.
+   If the token can access several accounts, the UI asks you to pick one.
 
-O token fica cifrado (AES-256-GCM) dentro do LXC e nunca volta para o navegador.
+The token is stored encrypted (AES-256-GCM) inside the LXC and is never sent back to the browser.
 
-## Como o keep-alive funciona
+## How keep-alive works
 
-São três camadas:
+There are three layers:
 
-1. O `cloudflared` mantém 4 conexões com a borda da Cloudflare e reconecta sozinho quando a rede cai.
-2. Cada túnel é uma unit systemd (`cloudflared@<id>.service`) com `Restart=always`, habilitada no boot.
-3. Um **watchdog** consulta o `/ready` de cada túnel a cada 30 s. Se o túnel ficar indisponível além da tolerância configurada (padrão 2 min), ele reinicia a unit com backoff exponencial (30 s → 10 min). Depois de 5 tentativas sem sucesso, desiste e mostra um alerta. Sem conexão com a internet, ele **não** reinicia nada: só espera a rede voltar.
+1. `cloudflared` keeps 4 connections to the Cloudflare edge and reconnects by itself when the network drops.
+2. Each tunnel is a systemd unit (`cloudflared@<id>.service`) with `Restart=always`, enabled at boot.
+3. A **watchdog** checks each tunnel's `/ready` endpoint every 30 s. If a tunnel stays unhealthy longer than its tolerance (default 2 min), it restarts the unit with exponential backoff (30 s → 10 min). After 5 failed attempts it gives up and shows an alert, and it recovers automatically when the tunnel comes back. Without internet access it restarts **nothing** — it just waits for the network to return.
 
-## Atualização
+## Updating
 
-Rode o mesmo comando de instalação **dentro do LXC** (ou `update`, se o community-scripts tiver instalado o atalho). Ele atualiza o sistema, o `cloudflared` e a interface. Os túneis continuam no ar durante a atualização da interface. O `cloudflared` também pode ser atualizado pela tela de Configurações.
+Run the same installation command **inside the LXC** (or `update`, if community-scripts installed the shortcut). It updates the OS, `cloudflared` and the UI. Tunnels keep running while the UI is updated. `cloudflared` can also be updated from the Settings page.
 
-## Desenvolvimento
+## Development
 
-Requisitos: Node 22.13+ (produção usa Node 24) e pnpm 9.
+Requirements: Node 22.13+ (production uses Node 24) and pnpm 9.
 
 ```bash
 pnpm install
-pnpm dev:fake-cf   # API falsa da Cloudflare em http://127.0.0.1:18787 (token: fake-token-0123456789abcdefghij)
-CF_API_BASE=http://127.0.0.1:18787 pnpm dev   # server (backend systemd simulado) + web em http://localhost:5173
+pnpm dev:fake-cf   # fake Cloudflare API at http://127.0.0.1:18787 (token: fake-token-0123456789abcdefghij)
+CF_API_BASE=http://127.0.0.1:18787 pnpm dev   # server (simulated systemd backend) + web at http://localhost:5173
 ```
 
-Para usar a API real, omita `CF_API_BASE`. O backend `SERVICE_BACKEND=fake` (padrão do `pnpm dev`) simula o systemd, então roda no macOS.
+To use the real API, omit `CF_API_BASE`. The `SERVICE_BACKEND=fake` backend (the `pnpm dev` default) simulates systemd, so it runs on macOS.
 
-| Comando | O que faz |
+| Command | What it does |
 |---|---|
-| `pnpm test` | Testes unitários (server, web, shared) |
-| `pnpm typecheck` | TypeScript em todos os pacotes |
-| `pnpm e2e` | Fluxo completo no navegador (Playwright) contra a Cloudflare falsa |
-| `bash scripts/package-release.sh v0.1.0` | Gera o tarball do release em `release/` |
-| `bash scripts/set-repo.sh usuario/repo` | Aponta os scripts do Proxmox para o seu repositório GitHub |
+| `pnpm test` | Unit tests (server, web, shared) |
+| `pnpm typecheck` | TypeScript across all packages |
+| `pnpm e2e` | Full browser flow (Playwright) against the fake Cloudflare API |
+| `bash scripts/package-release.sh v0.1.0` | Builds the release tarball into `release/` |
+| `bash scripts/set-repo.sh owner/repo` | Points the Proxmox scripts at your GitHub repository |
 
-### Publicando
+### Publishing
 
-1. `bash scripts/set-repo.sh <usuario>/<repo>` e commit.
-2. `git tag v0.1.0 && git push --tags`: o workflow `release` gera o tarball e cria o GitHub Release que o instalador baixa.
+1. `bash scripts/set-repo.sh <owner>/<repo>` and commit (already done for `cocardoso/cloudflared-proxmox`).
+2. `git tag v0.1.0 && git push --tags`: the `release` workflow builds the tarball and creates the GitHub Release the installer downloads.
 
-## Estrutura
+## Layout
 
 ```
-ct/                 script que roda no host Proxmox (cria o LXC)
-install/            script que roda dentro do LXC
-deploy/             units systemd e sudoers
-packages/shared/    schemas zod e tipos da API
-apps/server/        Fastify: API Cloudflare, systemd, watchdog, SQLite
+ct/                 script that runs on the Proxmox host (creates the LXC)
+install/            script that runs inside the LXC
+deploy/             systemd units and sudoers
+packages/shared/    zod schemas and API types
+apps/server/        Fastify: Cloudflare API, systemd, watchdog, SQLite
 apps/web/           React + Kumo + i18n (en, pt-BR)
-e2e/                testes Playwright
-docs/               spec, plano e checklist de teste manual
+e2e/                Playwright tests
+docs/               spec, plan and manual test checklist
 ```
 
-## Limitações conhecidas
+## Known limitations
 
-- Em LXC não-privilegiado, o `cloudflared` pode registrar avisos sobre buffers UDP do QUIC e sobre `ping_group_range` (proxy ICMP). Eles não impedem o funcionamento; se quiser, force o protocolo `http2` nas configurações do túnel.
-- Túneis com configuração local (`config.yml`) aparecem apenas para leitura.
-- Um único usuário administrador.
+- In an unprivileged LXC, `cloudflared` may log warnings about QUIC UDP buffers and `ping_group_range` (ICMP proxy). They do not affect operation; if you prefer, force the `http2` protocol in the tunnel settings.
+- Tunnels configured with a local `config.yml` are shown read-only.
+- A single admin user.

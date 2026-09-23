@@ -1,215 +1,215 @@
-# Cloudflared Manager para Proxmox — Design
+# Cloudflared Manager for Proxmox — Design
 
-- **Data:** 2026-09-22
-- **Status:** aguardando revisão
-- **Referência:** script [community-scripts cloudflared](https://community-scripts.org/scripts/cloudflared) (`ct/cloudflared.sh` + `install/cloudflared-install.sh`).
+- **Date:** 2026-09-22
+- **Status:** awaiting review
+- **Reference:** [community-scripts cloudflared](https://community-scripts.org/scripts/cloudflared) script (`ct/cloudflared.sh` + `install/cloudflared-install.sh`).
 
-## 1. Objetivo
+## 1. Goal
 
-Um script estilo community-scripts que cria, no Proxmox, um LXC com `cloudflared` **e** uma aplicação web de gerenciamento de túneis Cloudflare. O usuário configura tudo pelo navegador, fecha a página e os túneis continuam no ar, sem nada rodando no desktop.
+A community-scripts-style script that creates, on Proxmox, an LXC with `cloudflared` **and** a Cloudflare tunnel management web application. The user configures everything from the browser, closes the page, and the tunnels keep running, with nothing running on the desktop.
 
-### Contexto e premissas do usuário
+### User context and assumptions
 
-- Uso: **homelab pessoal**, acesso à GUI pela LAN, um único administrador.
-- Gerenciamento **100% via web**, construído do zero.
-- **Keep-alive** configurável por túnel; o túnel deve se recuperar sozinho de queda de processo, de internet ou de qualquer outra falha.
-- Gerenciar, parar, excluir e alterar túneis pela interface.
-- Usar **vários domínios** (zonas) da conta Cloudflare: túnel A no domínio A, túnel B no domínio B (ou um túnel com rotas em ambos).
-- Autenticação com a Cloudflare com o mínimo de atrito possível.
-- Interface em **inglês e português (pt-BR)**.
-- Visual idêntico ao painel da Cloudflare.
+- Use case: **personal homelab**, GUI access over the LAN, a single administrator.
+- **100% web-based** management, built from scratch.
+- Per-tunnel configurable **keep-alive**; the tunnel must recover on its own from a process crash, internet outage, or any other failure.
+- Manage, stop, delete, and modify tunnels through the interface.
+- Use **multiple domains** (zones) from the Cloudflare account: tunnel A on domain A, tunnel B on domain B (or one tunnel with routes on both).
+- Cloudflare authentication with as little friction as possible.
+- Interface in **English and Brazilian Portuguese (pt-BR)**.
+- Visual identical to the Cloudflare dashboard.
 
-### Decisões tomadas
+### Decisions made
 
-| Tema | Decisão | Motivo |
+| Topic | Decision | Reason |
 |---|---|---|
-| Modelo de túnel | Túneis **gerenciados remotamente** via API Cloudflare (`config_src: cloudflare`) | Permite CRUD completo de túneis, rotas e DNS; modelo recomendado pela Cloudflare; o painel Zero Trust continua coerente. |
-| Autenticação Cloudflare | **API Token** criado por um link com permissões pré-preenchidas, colado uma única vez e guardado cifrado | A Cloudflare não oferece OAuth para aplicações de terceiros; `cloudflared tunnel login` é limitado a uma zona e não permite editar configuração remota; Global API Key dá acesso total. |
-| Stack | Node.js/TypeScript: **Fastify + React (Vite) + SQLite** | TS de ponta a ponta com tipos compartilhados; SDK oficial `cloudflare` para Node. |
-| Design system | **Kumo** (`@cloudflare/kumo`), o design system oficial do painel Cloudflare | Visual igual ao do painel sem imitação manual. |
-| Acesso à GUI | **Senha local de admin** (argon2 + cookie de sessão) | Protege o token contra outros dispositivos da LAN. |
-| i18n | `react-i18next` com `en` e `pt-BR` | Pedido do usuário. |
-| Instalação | Reuso do motor `build.func` do community-scripts, apontando para os nossos `ct/` e `install/` | Mesma experiência (menus, defaults, update) sem manter um motor próprio. |
+| Tunnel model | **Remotely managed** tunnels via the Cloudflare API (`config_src: cloudflare`) | Enables full CRUD for tunnels, routes, and DNS; the model recommended by Cloudflare; keeps the Zero Trust dashboard consistent. |
+| Cloudflare authentication | **API Token** created via a link with pre-filled permissions, pasted once and stored encrypted | Cloudflare does not offer OAuth for third-party applications; `cloudflared tunnel login` is limited to a single zone and doesn't allow editing remote configuration; a Global API Key grants full access. |
+| Stack | Node.js/TypeScript: **Fastify + React (Vite) + SQLite** | End-to-end TS with shared types; official `cloudflare` SDK for Node. |
+| Design system | **Kumo** (`@cloudflare/kumo`), the Cloudflare dashboard's official design system | Same look as the dashboard without manual imitation. |
+| GUI access | **Local admin password** (argon2 + session cookie) | Protects the token from other devices on the LAN. |
+| i18n | `react-i18next` with `en` and `pt-BR` | User request. |
+| Installation | Reuse of the community-scripts `build.func` engine, pointing to our `ct/` and `install/` | Same experience (menus, defaults, update) without maintaining our own engine. |
 
-## 2. Arquitetura
+## 2. Architecture
 
 ```
-┌──────────────── LXC Debian 13 (não-privilegiado) ─────────────────┐
+┌──────────────── LXC Debian 13 (unprivileged) ─────────────────────┐
 │                                                                   │
-│  tunnel-manager.service (Node, usuário "tunnelmgr", porta 8080)   │
-│   ├─ API HTTP (Fastify) + frontend React servido estático          │
+│  tunnel-manager.service (Node, user "tunnelmgr", port 8080)       │
+│   ├─ HTTP API (Fastify) + statically served React frontend        │
 │   ├─ cloudflare/  ────────────────────────► api.cloudflare.com    │
-│   ├─ services/    ── sudo restrito ───────► systemctl/journalctl  │
-│   ├─ watchdog/    ── a cada 30s ──────────► 127.0.0.1:<porta>/ready│
+│   ├─ services/    ── restricted sudo ─────► systemctl/journalctl  │
+│   ├─ watchdog/    ── every 30s ───────────► 127.0.0.1:<port>/ready│
 │   └─ store/       ── SQLite /var/lib/tunnel-manager/data.db       │
 │                                                                   │
-│  cloudflared@<tunnel-id>.service   (1 unit por túnel)             │
-│   └─ cloudflared tunnel --metrics 127.0.0.1:<porta> run           │
+│  cloudflared@<tunnel-id>.service   (1 unit per tunnel)            │
+│   └─ cloudflared tunnel --metrics 127.0.0.1:<port> run            │
 │        TUNNEL_TOKEN via /etc/tunnel-manager/tunnels/<id>.env      │
 └───────────────────────────────────────────────────────────────────┘
 ```
 
-### 2.1 Unidades
+### 2.1 Units
 
-- **`cloudflare/`**: wrapper fino sobre o SDK oficial `cloudflare`. Responsabilidades:
-  - verificar o token (`/user/tokens/verify`), listar contas e zonas;
-  - CRUD de túneis `cfd_tunnel` com `config_src: cloudflare`;
-  - ler e escrever a configuração remota (`GET/PUT /accounts/{account}/cfd_tunnel/{id}/configurations`);
-  - buscar o token do túnel (`GET .../cfd_tunnel/{id}/token`);
-  - CRUD de registros CNAME `<host> → <tunnel-id>.cfargotunnel.com` (proxied);
-  - ler conexões ativas do túnel (datacenters, versão do conector).
-  - Traduz erros da API para códigos de domínio (seção 4).
-- **`services/`**: único módulo que toca o sistema operacional. Fica atrás de uma interface `ServiceBackend` com duas implementações: `systemd` (produção) e `fake` (dev/testes, ativada com `SERVICE_BACKEND=fake`).
-  - escreve `/etc/tunnel-manager/tunnels/<id>.env` (modo 0600, dono `tunnelmgr`) com `TUNNEL_TOKEN`, `TUNNEL_METRICS`, `TUNNEL_LOGLEVEL` e `TUNNEL_TRANSPORT_PROTOCOL`;
-  - `enable/start/stop/restart/disable` de `cloudflared@<id>` via `sudo systemctl`;
-  - estado da unit (`systemctl show`) e logs (`journalctl -u cloudflared@<id> -o json`, com follow para streaming).
-- **`watchdog/`**: loop a cada 30 s para cada túnel com keep-alive ligado (ver 4.2).
-- **`store/`**: SQLite (`better-sqlite3`) com migrações versionadas. Tabelas:
-  - `admin` (usuário, hash argon2id);
-  - `settings` (id da conta, token Cloudflare cifrado, sufixo do token, idioma padrão);
-  - `tunnels` (id Cloudflare, porta de métricas, keep-alive, tolerância em minutos, loglevel, protocolo, estado do watchdog, contadores de falha);
-  - `managed_dns` (id do registro DNS, zona, hostname, túnel), usado para saber quais registros a aplicação criou e pode remover;
-  - `events` (túnel, tipo, mensagem, timestamp), com retenção de 30 dias.
-  - O token Cloudflare é cifrado com AES-256-GCM usando a chave em `/etc/tunnel-manager/secret.key` (gerada na instalação, modo 0600).
-- **`web/`**: SPA React + Kumo + TanStack Query + react-router + react-i18next. Conversa apenas com a API HTTP.
-- **`packages/shared/`**: schemas zod e tipos do contrato da API, usados pelo server (validação) e pela web (tipagem).
+- **`cloudflare/`**: thin wrapper over the official `cloudflare` SDK. Responsibilities:
+  - verify the token (`/user/tokens/verify`), list accounts and zones;
+  - CRUD of `cfd_tunnel` tunnels with `config_src: cloudflare`;
+  - read and write the remote configuration (`GET/PUT /accounts/{account}/cfd_tunnel/{id}/configurations`);
+  - fetch the tunnel token (`GET .../cfd_tunnel/{id}/token`);
+  - CRUD of `<host> → <tunnel-id>.cfargotunnel.com` CNAME records (proxied);
+  - read the tunnel's active connections (datacenters, connector version).
+  - Translates API errors into domain error codes (section 4).
+- **`services/`**: the only module that touches the operating system. Sits behind a `ServiceBackend` interface with two implementations: `systemd` (production) and `fake` (dev/testing, enabled with `SERVICE_BACKEND=fake`).
+  - writes `/etc/tunnel-manager/tunnels/<id>.env` (mode 0600, owned by `tunnelmgr`) with `TUNNEL_TOKEN`, `TUNNEL_METRICS`, `TUNNEL_LOGLEVEL`, and `TUNNEL_TRANSPORT_PROTOCOL`;
+  - `enable/start/stop/restart/disable` of `cloudflared@<id>` via `sudo systemctl`;
+  - unit state (`systemctl show`) and logs (`journalctl -u cloudflared@<id> -o json`, with follow for streaming).
+- **`watchdog/`**: a loop every 30 s for each tunnel with keep-alive enabled (see 4.2).
+- **`store/`**: SQLite (`better-sqlite3`) with versioned migrations. Tables:
+  - `admin` (username, argon2id hash);
+  - `settings` (account id, encrypted Cloudflare token, token suffix, default language);
+  - `tunnels` (Cloudflare id, metrics port, keep-alive, tolerance in minutes, loglevel, protocol, watchdog state, failure counters);
+  - `managed_dns` (DNS record id, zone, hostname, tunnel), used to know which records the application created and can remove;
+  - `events` (tunnel, type, message, timestamp), with 30-day retention.
+  - The Cloudflare token is encrypted with AES-256-GCM using the key at `/etc/tunnel-manager/secret.key` (generated during installation, mode 0600).
+- **`web/`**: React SPA + Kumo + TanStack Query + react-router + react-i18next. Talks only to the HTTP API.
+- **`packages/shared/`**: zod schemas and API contract types, used by the server (validation) and the web app (typing).
 
-### 2.2 Fonte da verdade
+### 2.2 Source of truth
 
-- **Cloudflare** é a fonte da verdade para túneis, rotas (ingress) e DNS. A GUI sempre lê da API; edições feitas no painel Zero Trust aparecem na GUI.
-- **SQLite** guarda apenas o que é local: admin, token, parâmetros de execução dos túneis que rodam neste LXC, DNS gerenciados e eventos.
-- Um túnel da conta que ainda não roda neste LXC aparece como **"não executado aqui"** e pode ser **adotado** (a aplicação busca o token do túnel e cria a unit). Túneis locally-managed (`config_src: local`) são listados como somente leitura, com aviso.
-- Alterar rotas **não reinicia** o `cloudflared`: a configuração remota chega ao conector em poucos segundos.
+- **Cloudflare** is the source of truth for tunnels, routes (ingress), and DNS. The GUI always reads from the API; edits made in the Zero Trust dashboard appear in the GUI.
+- **SQLite** stores only what is local: admin, token, runtime parameters of the tunnels running on this LXC, managed DNS, and events.
+- An account tunnel that isn't yet running on this LXC appears as **"not running here"** and can be **adopted** (the application fetches the tunnel token and creates the unit). Locally-managed tunnels (`config_src: local`) are listed as read-only, with a warning.
+- Changing routes **does not restart** `cloudflared`: the remote configuration reaches the connector within a few seconds.
 
-## 3. Telas e fluxos
+## 3. Screens and flows
 
-### 3.1 Setup inicial (wizard, só no primeiro acesso)
+### 3.1 Initial setup (wizard, first access only)
 
-1. Criar usuário e senha do admin (senha com mínimo de 12 caracteres).
-2. Conectar à Cloudflare: o botão **"Criar token na Cloudflare"** abre `https://dash.cloudflare.com/profile/api-tokens` com nome e permissões pré-preenchidos:
+1. Create the admin username and password (password with a minimum of 12 characters).
+2. Connect to Cloudflare: the **"Create token on Cloudflare"** button opens `https://dash.cloudflare.com/profile/api-tokens` with a pre-filled name and permissions:
    - Account → Cloudflare Tunnel → Edit
    - Zone → DNS → Edit
    - Zone → Zone → Read
-   - Recursos: todas as zonas da conta.
-   O usuário cola o token; a aplicação valida, detecta a(s) conta(s) (seletor se houver mais de uma) e lista as zonas encontradas. Se faltar permissão, mostra qual está faltando.
-3. Redireciona para o Dashboard.
+   - Resources: all zones in the account.
+   The user pastes the token; the application validates it, detects the account(s) (a selector if there's more than one), and lists the zones found. If a permission is missing, it shows which one.
+3. Redirects to the Dashboard.
 
-> O formato exato do link pré-preenchido (parâmetros de query aceitos pelo painel) será confirmado na implementação. Se o painel não aceitar pré-preenchimento, a tela mostra as permissões com instruções passo a passo e botão de copiar.
+> The exact format of the pre-filled link (query parameters accepted by the dashboard) will be confirmed during implementation. If the dashboard doesn't support pre-filling, the screen shows the permissions with step-by-step instructions and a copy button.
 
 ### 3.2 Dashboard
 
-- Cards de resumo: túneis saudáveis / degradados / parados / falhando, total de rotas, últimos eventos do watchdog.
-- Lista de túneis mostrando:
-  - status **local** (unit: ativa, parada, falhando);
-  - status **edge** (número de conexões e datacenters, ex.: GRU, EZE);
-  - uptime e keep-alive on/off.
-- Ação primária: **Criar túnel**.
+- Summary cards: healthy / degraded / stopped / failing tunnels, total routes, latest watchdog events.
+- Tunnel list showing:
+  - **local** status (unit: active, stopped, failing);
+  - **edge** status (number of connections and datacenters, e.g., GRU, EZE);
+  - uptime and keep-alive on/off.
+- Primary action: **Create tunnel**.
 
-### 3.3 Criar túnel
+### 3.3 Create tunnel
 
-Nome → a aplicação cria o túnel remoto, busca o token, aloca a porta de métricas, escreve o `.env`, habilita e inicia a unit. O passo seguinte, opcional, é adicionar a primeira rota.
+Name → the application creates the remote tunnel, fetches the token, allocates the metrics port, writes the `.env`, and enables and starts the unit. The next step, optional, is adding the first route.
 
-### 3.4 Detalhe do túnel (abas)
+### 3.4 Tunnel detail (tabs)
 
-- **Rotas**: tabela hostname → serviço. Formulário com:
-  - seletor de **domínio** (zonas da conta) + subdomínio + path opcional;
-  - serviço: `http://`, `https://`, `tcp://`, `ssh://`, `rdp://`, `unix:`, `http_status:`;
-  - avançado (`originRequest`): `noTLSVerify`, `httpHostHeader`, `originServerName`, `connectTimeout`, `keepAliveTimeout`;
-  - botão **Testar origem** (conexão TCP/HTTP feita a partir do LXC).
-  - Reordenação das regras (a ordem importa no ingress); o catch-all `http_status:404` é sempre mantido por último e não é editável.
-- **Status**: conexões ativas por datacenter, versão do `cloudflared`, gráfico (ECharts via Kumo) de requisições e erros extraído do `/metrics` (amostragem guardada em memória, janela de 1 h).
-- **Logs**: stream ao vivo do `journalctl` via SSE, com filtro por nível e pausa.
-- **Eventos**: histórico de restarts, quedas, recuperações e alterações de configuração.
-- **Configurações**: renomear; keep-alive on/off; tolerância antes do restart (padrão 2 min); loglevel; protocolo (`auto`/`quic`/`http2`).
-- **Zona de perigo**: **Parar**, **Reiniciar**, **Excluir**. Excluir remove as rotas, os DNS em `managed_dns`, o túnel na Cloudflare, a unit e o `.env`; exige digitar o nome do túnel.
+- **Routes**: hostname → service table. Form with:
+  - **domain** selector (account zones) + subdomain + optional path;
+  - service: `http://`, `https://`, `tcp://`, `ssh://`, `rdp://`, `unix:`, `http_status:`;
+  - advanced (`originRequest`): `noTLSVerify`, `httpHostHeader`, `originServerName`, `connectTimeout`, `keepAliveTimeout`;
+  - **Test origin** button (TCP/HTTP connection made from the LXC).
+  - Rule reordering (order matters in ingress); the `http_status:404` catch-all is always kept last and is not editable.
+- **Status**: active connections per datacenter, `cloudflared` version, a chart (ECharts via Kumo) of requests and errors extracted from `/metrics` (sampling kept in memory, 1 h window).
+- **Logs**: live stream of `journalctl` via SSE, with level filter and pause.
+- **Events**: history of restarts, crashes, recoveries, and configuration changes.
+- **Settings**: rename; keep-alive on/off; tolerance before restart (default 2 min); loglevel; protocol (`auto`/`quic`/`http2`).
+- **Danger zone**: **Stop**, **Restart**, **Delete**. Delete removes the routes, the DNS entries in `managed_dns`, the tunnel on Cloudflare, the unit, and the `.env`; requires typing the tunnel name.
 
-### 3.5 Configurações gerais
+### 3.5 General settings
 
-- Trocar senha do admin.
-- Trocar ou revalidar o token Cloudflare (exibido apenas como `••••abcd`).
-- Idioma (en / pt-BR; o padrão vem do navegador) e tema (claro / escuro / sistema).
-- Versão do `cloudflared` instalada vs. última disponível, com botão **Atualizar** (`apt-get install --only-upgrade cloudflared` via sudoers, seguido de restart dos túneis).
-- Exportar e importar backup (JSON com parâmetros locais dos túneis e `managed_dns`; o token não é exportado).
+- Change the admin password.
+- Change or revalidate the Cloudflare token (shown only as `••••abcd`).
+- Language (en / pt-BR; the default comes from the browser) and theme (light / dark / system).
+- Installed `cloudflared` version vs. the latest available, with an **Update** button (`apt-get install --only-upgrade cloudflared` via sudoers, followed by a restart of the tunnels).
+- Export and import backup (JSON with local tunnel parameters and `managed_dns`; the token is not exported).
 
-### 3.6 Fora do escopo (por enquanto)
+### 3.6 Out of scope (for now)
 
-Multiusuário, Cloudflare Access, WARP/private networks, notificações externas (Telegram, e-mail), outros idiomas além de en/pt-BR. A arquitetura não impede adicioná-los depois.
+Multi-user support, Cloudflare Access, WARP/private networks, external notifications (Telegram, email), languages other than en/pt-BR. The architecture doesn't prevent adding them later.
 
-## 4. Fluxo de dados, erros e resiliência
+## 4. Data flow, errors, and resilience
 
-### 4.1 Adicionar ou editar uma rota
+### 4.1 Adding or editing a route
 
-1. UI: `POST /api/tunnels/:id/routes` (ou `PUT .../routes/:index`).
-2. Server lê a configuração atual do túnel na Cloudflare, aplica a alteração mantendo o catch-all por último e faz o `PUT` da configuração.
-3. Cria ou atualiza o CNAME `host → <id>.cfargotunnel.com` (proxied) e registra o registro em `managed_dns`.
-   - Se já existir um registro para o host apontando para **outro destino**, a operação é abortada antes do passo 2 com `DNS_CONFLICT`; a UI pergunta se deve sobrescrever e reenvia com `overwrite: true`.
-4. Se o passo 3 falhar, o server faz **rollback** do ingress para a versão lida no passo 2 e devolve o erro. O estado nunca fica parcialmente aplicado.
+1. UI: `POST /api/tunnels/:id/routes` (or `PUT .../routes/:index`).
+2. The server reads the tunnel's current configuration on Cloudflare, applies the change while keeping the catch-all last, and does a `PUT` of the configuration.
+3. Creates or updates the `host → <id>.cfargotunnel.com` CNAME (proxied) and records the entry in `managed_dns`.
+   - If a record for the host already exists pointing to a **different destination**, the operation is aborted before step 2 with `DNS_CONFLICT`; the UI asks whether to overwrite it and resends with `overwrite: true`.
+4. If step 3 fails, the server **rolls back** the ingress to the version read in step 2 and returns the error. The state is never left partially applied.
 
-Remover uma rota: remove do ingress e, se o registro estiver em `managed_dns`, remove o CNAME (com confirmação na UI).
+Removing a route: removes it from the ingress and, if the record is in `managed_dns`, removes the CNAME (with UI confirmation).
 
-### 4.2 Watchdog e keep-alive
+### 4.2 Watchdog and keep-alive
 
-Três camadas de recuperação:
+Three layers of recovery:
 
-1. **cloudflared**: mantém 4 conexões com a edge e reconecta sozinho quando a rede cai.
-2. **systemd**: `Restart=always`, `RestartSec=5`, units `enabled`, então sobem no boot.
-3. **watchdog** (apenas túneis com keep-alive ligado), máquina de estados por túnel:
-   - `healthy`: unit ativa e `/ready` responde 200.
-   - `degraded`: falhou a verificação; registra um evento; espera a tolerância configurada.
-   - `restarting`: tolerância estourada → `systemctl restart`, com backoff exponencial de 30 s até 10 min entre tentativas.
-   - `failing`: 5 restarts seguidos sem voltar a `healthy`; o watchdog para de reiniciar e a UI mostra alerta com ação "tentar de novo".
-   - Voltar a `healthy` zera os contadores.
-   - Sem internet, `/ready` falha em todos os túneis; se o host `api.cloudflare.com` também estiver inacessível, o watchdog registra "sem conectividade" e **não** conta restarts (reiniciar não ajuda).
+1. **cloudflared**: maintains 4 connections to the edge and reconnects on its own when the network drops.
+2. **systemd**: `Restart=always`, `RestartSec=5`, units `enabled`, so they come up on boot.
+3. **watchdog** (tunnels with keep-alive enabled only), per-tunnel state machine:
+   - `healthy`: unit active and `/ready` returns 200.
+   - `degraded`: the check failed; logs an event; waits for the configured tolerance.
+   - `restarting`: tolerance exceeded → `systemctl restart`, with exponential backoff from 30 s up to 10 min between attempts.
+   - `failing`: 5 consecutive restarts without returning to `healthy`; the watchdog stops restarting and the UI shows an alert with a "try again" action.
+   - Returning to `healthy` resets the counters.
+   - Without internet, `/ready` fails for all tunnels; if the `api.cloudflare.com` host is also unreachable, the watchdog logs "no connectivity" and **does not** count restarts (restarting won't help).
 
-Com keep-alive desligado, o túnel ainda tem as camadas 1 e 2; apenas o watchdog não age.
+With keep-alive disabled, the tunnel still has layers 1 and 2; only the watchdog doesn't act.
 
-### 4.3 Erros
+### 4.3 Errors
 
-- Formato único: `{ code, message, details? }` com HTTP status coerente.
-- Códigos de domínio, por exemplo: `CF_UNREACHABLE`, `CF_TOKEN_INVALID`, `CF_PERMISSION_MISSING` (com a permissão faltante em `details`), `CF_RATE_LIMITED`, `DNS_CONFLICT`, `TUNNEL_NOT_FOUND`, `SERVICE_COMMAND_FAILED`, `VALIDATION_ERROR`.
-- A UI traduz o `code` (en/pt-BR) e sugere a ação correspondente.
+- Single format: `{ code, message, details? }` with a consistent HTTP status.
+- Domain error codes, for example: `CF_UNREACHABLE`, `CF_TOKEN_INVALID`, `CF_PERMISSION_MISSING` (with the missing permission in `details`), `CF_RATE_LIMITED`, `DNS_CONFLICT`, `TUNNEL_NOT_FOUND`, `SERVICE_COMMAND_FAILED`, `VALIDATION_ERROR`.
+- The UI translates the `code` (en/pt-BR) and suggests the corresponding action.
 
-### 4.4 Situações degradadas
+### 4.4 Degraded situations
 
-- **Sem internet**: status local, logs e eventos continuam funcionando; ações que dependem da API mostram "Cloudflare inacessível".
-- **Token revogado ou expirado**: os túneis continuam rodando (cada um usa seu próprio token de túnel); a GUI entra em modo "reconectar" e bloqueia só as ações de API.
-- **Reboot do LXC**: units e GUI sobem sozinhas; os túneis não dependem da GUI.
+- **No internet**: local status, logs, and events keep working; actions that depend on the API show "Cloudflare unreachable".
+- **Revoked or expired token**: the tunnels keep running (each uses its own tunnel token); the GUI enters "reconnect" mode and blocks only the API-dependent actions.
+- **LXC reboot**: units and GUI come up on their own; the tunnels don't depend on the GUI.
 
-### 4.5 Segurança
+### 4.5 Security
 
-- Sessão em cookie `httpOnly`, `SameSite=Strict`, expiração de 7 dias; rate limit no login (5 tentativas/min por IP).
-- Token Cloudflare cifrado em repouso; nunca devolvido à UI (só os 4 últimos caracteres).
-- `tunnelmgr` é um usuário sem shell; sudoers permite apenas:
+- Session in an `httpOnly` cookie, `SameSite=Strict`, 7-day expiration; rate limit on login (5 attempts/min per IP).
+- Cloudflare token encrypted at rest; never returned to the UI (only the last 4 characters).
+- `tunnelmgr` is a shell-less user; sudoers only allows:
   - `systemctl start|stop|restart|enable|disable|show cloudflared@*`
   - `journalctl -u cloudflared@*`
   - `apt-get install --only-upgrade -y cloudflared`
-- Validação zod em todas as entradas da API; o id do túnel é validado como UUID antes de virar nome de unit ou de arquivo.
+- zod validation on all API inputs; the tunnel id is validated as a UUID before becoming a unit or file name.
 
-## 5. Instalação no Proxmox
+## 5. Installation on Proxmox
 
-Na shell do host Proxmox:
+In the Proxmox host shell:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/<usuario>/cloudflared-proxmox/main/ct/cloudflared-manager.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/<owner>/cloudflared-proxmox/main/ct/cloudflared-manager.sh)"
 ```
 
-### 5.1 `ct/cloudflared-manager.sh` (roda no host)
+### 5.1 `ct/cloudflared-manager.sh` (runs on the host)
 
-- Define `_CS_DEFAULT_URL` apontando para o raw do nosso repositório e faz `source` do `build.func` de `community-scripts/core` **fixado em um commit** (via `COMMUNITY_SCRIPTS_CORE_URL`).
-- Padrões: Debian 13, 1 vCPU, 1024 MB RAM, 4 GB disco, não-privilegiado, `var_arm64=yes`, tags `network;cloudflare`. Todos ajustáveis pelos menus do `build.func`.
-- `update_script()`: `apt` upgrade (inclui `cloudflared`) + download do último release do manager, troca atômica do diretório da aplicação, migrações e restart de `tunnel-manager.service`. Os túneis não são reiniciados pelo update do manager.
+- Sets `_CS_DEFAULT_URL` pointing to our repository's raw content and `source`s the `build.func` from `community-scripts/core` **pinned to a commit** (via `COMMUNITY_SCRIPTS_CORE_URL`).
+- Defaults: Debian 13, 1 vCPU, 1024 MB RAM, 4 GB disk, unprivileged, `var_arm64=yes`, tags `network;cloudflare`. All adjustable through the `build.func` menus.
+- `update_script()`: `apt` upgrade (includes `cloudflared`) + download of the manager's latest release, atomic swap of the application directory, migrations, and restart of `tunnel-manager.service`. The tunnels are not restarted by the manager update.
 
-### 5.2 `install/cloudflared-manager-install.sh` (roda no LXC)
+### 5.2 `install/cloudflared-manager-install.sh` (runs on the LXC)
 
-1. Repositório apt da Cloudflare + `cloudflared` (igual ao script da comunidade).
+1. Cloudflare apt repository + `cloudflared` (same as the community script).
 2. Node.js 22 LTS.
-3. Usuário `tunnelmgr`; diretórios `/opt/tunnel-manager`, `/var/lib/tunnel-manager`, `/etc/tunnel-manager/tunnels`.
-4. `secret.key` aleatória (0600).
-5. `/etc/sudoers.d/tunnel-manager`, `cloudflared@.service` e `tunnel-manager.service` (copiados de `deploy/`).
-6. Download do tarball do último GitHub Release **da arquitetura do container** (`linux-x64` ou `linux-arm64`) para `/opt/tunnel-manager`. O tarball já traz `node_modules` de produção com os módulos nativos (`better-sqlite3`, `argon2`) compilados no CI, então nada é compilado no container.
-7. `systemctl enable --now tunnel-manager`; mensagem final com `http://<ip>:8080`.
+3. `tunnelmgr` user; directories `/opt/tunnel-manager`, `/var/lib/tunnel-manager`, `/etc/tunnel-manager/tunnels`.
+4. Random `secret.key` (0600).
+5. `/etc/sudoers.d/tunnel-manager`, `cloudflared@.service`, and `tunnel-manager.service` (copied from `deploy/`).
+6. Download of the tarball from the latest GitHub Release **matching the container's architecture** (`linux-x64` or `linux-arm64`) into `/opt/tunnel-manager`. The tarball already includes production `node_modules` with the native modules (`better-sqlite3`, `argon2`) compiled in CI, so nothing is compiled inside the container.
+7. `systemctl enable --now tunnel-manager`; final message with `http://<ip>:8080`.
 
-### 5.3 Template da unit do túnel
+### 5.3 Tunnel unit template
 
 ```ini
 # /etc/systemd/system/cloudflared@.service
@@ -229,9 +229,9 @@ DynamicUser=yes
 WantedBy=multi-user.target
 ```
 
-(O `cloudflared` lê `TUNNEL_TOKEN`, `TUNNEL_METRICS`, `TUNNEL_LOGLEVEL` e `TUNNEL_TRANSPORT_PROTOCOL` das variáveis de ambiente.)
+(`cloudflared` reads `TUNNEL_TOKEN`, `TUNNEL_METRICS`, `TUNNEL_LOGLEVEL`, and `TUNNEL_TRANSPORT_PROTOCOL` from environment variables.)
 
-## 6. Estrutura do repositório
+## 6. Repository structure
 
 ```
 ct/cloudflared-manager.sh
@@ -244,25 +244,25 @@ deploy/                   # cloudflared@.service, tunnel-manager.service, sudoer
 docs/
 ```
 
-Monorepo pnpm.
+pnpm monorepo.
 
-## 7. Testes
+## 7. Tests
 
 - **Server** (Vitest):
-  - `cloudflare/` contra mock HTTP (`msw`): tradução de erros, paginação, permissões faltantes.
-  - Fluxo de rotas: inserção antes do catch-all, conflito de DNS, rollback do ingress quando o DNS falha.
-  - Watchdog: máquina de estados com relógio falso (backoff, limite de 5, sem-conectividade não conta restart).
-  - `services/` testado pela implementação `fake`; a implementação `systemd` tem testes de construção de comandos (sem executar).
-  - Cifragem do token (round-trip, chave errada falha).
-- **Web** (Vitest + Testing Library): formulário de rota, wizard de setup, troca de idioma.
-- **E2E** (Playwright): setup → criar túnel → adicionar rota → excluir túnel, com server em `SERVICE_BACKEND=fake` e Cloudflare mockada.
-- **Scripts**: `shellcheck` no CI; teste real manual no Proxmox seguindo um checklist em `docs/`.
-- **Dev local no macOS**: `SERVICE_BACKEND=fake` permite rodar a aplicação completa sem Linux/systemd.
+  - `cloudflare/` against an HTTP mock (`msw`): error translation, pagination, missing permissions.
+  - Route flow: insertion before the catch-all, DNS conflict, ingress rollback when DNS fails.
+  - Watchdog: state machine with a fake clock (backoff, limit of 5, no-connectivity doesn't count as a restart).
+  - `services/` tested through the `fake` implementation; the `systemd` implementation has command-construction tests (without executing them).
+  - Token encryption (round-trip, wrong key fails).
+- **Web** (Vitest + Testing Library): route form, setup wizard, language switching.
+- **E2E** (Playwright): setup → create tunnel → add route → delete tunnel, with the server in `SERVICE_BACKEND=fake` and Cloudflare mocked.
+- **Scripts**: `shellcheck` in CI; real manual test on Proxmox following a checklist in `docs/`.
+- **Local dev on macOS**: `SERVICE_BACKEND=fake` allows running the complete application without Linux/systemd.
 
-## 8. Riscos e pontos a confirmar na implementação
+## 8. Risks and points to confirm during implementation
 
-- Parâmetros de pré-preenchimento do link de criação de token no painel Cloudflare (fallback descrito em 3.1).
-- Endpoint e formato exatos das conexões ativas do túnel na API (`/cfd_tunnel/{id}/connections`).
-- Compatibilidade do `DynamicUser=yes` com `EnvironmentFile` dono de `tunnelmgr` em LXC não-privilegiado (o `EnvironmentFile` é lido pelo systemd como root, então deve funcionar; validar no teste manual).
-- Avisos do `cloudflared` em LXC não-privilegiado (buffers UDP do QUIC, `ping_group_range` para proxy ICMP): documentar, não bloqueiam o funcionamento.
-- Estabilidade da API do Kumo (biblioteca nova); fixar a versão.
+- Pre-fill parameters for the token creation link on the Cloudflare dashboard (fallback described in 3.1).
+- Exact endpoint and format of the tunnel's active connections in the API (`/cfd_tunnel/{id}/connections`).
+- Compatibility of `DynamicUser=yes` with an `EnvironmentFile` owned by `tunnelmgr` on an unprivileged LXC (the `EnvironmentFile` is read by systemd as root, so it should work; validate during the manual test).
+- `cloudflared` warnings on an unprivileged LXC (QUIC UDP buffers, `ping_group_range` for ICMP proxying): document them, they don't block functionality.
+- Stability of the Kumo API (new library); pin the version.

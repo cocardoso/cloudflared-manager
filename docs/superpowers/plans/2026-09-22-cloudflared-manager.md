@@ -1,76 +1,76 @@
-# Cloudflared Manager — Plano de Implementação
+# Cloudflared Manager — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Aplicação web (Fastify + React/Kumo) que gerencia túneis Cloudflare remotamente gerenciados rodando como units systemd num LXC do Proxmox, mais os scripts `ct/` + `install/` no padrão community-scripts.
+**Goal:** A web application (Fastify + React/Kumo) that manages remotely-managed Cloudflare tunnels running as systemd units in a Proxmox LXC, plus the `ct/` + `install/` scripts following the community-scripts pattern.
 
-**Architecture:** Monorepo pnpm com `packages/shared` (schemas zod + códigos de erro), `apps/server` (Fastify; módulos `cloudflare/`, `services/`, `tunnels/`, `watchdog/`, `db/`, `auth/`, `http/`) e `apps/web` (SPA React + Kumo + TanStack Query + react-i18next). O server é empacotado com esbuild num único `server.mjs`, sem dependências nativas, e o release é um tarball único (independente de arquitetura).
+**Architecture:** pnpm monorepo with `packages/shared` (zod schemas + error codes), `apps/server` (Fastify; `cloudflare/`, `services/`, `tunnels/`, `watchdog/`, `db/`, `auth/`, `http/` modules) and `apps/web` (React SPA + Kumo + TanStack Query + react-i18next). The server is bundled with esbuild into a single `server.mjs`, with no native dependencies, and the release is a single tarball (architecture-independent).
 
-**Tech Stack:** Node 24 LTS (dev funciona em Node 22.13+), TypeScript 5, Fastify 5, `node:sqlite`, `node:crypto` (scrypt, AES-256-GCM), zod 4, Vitest 4, React 19, Vite 8, Tailwind 4, `@cloudflare/kumo` 2.14.0, `@phosphor-icons/react`, TanStack Query 5, react-router 7, react-i18next, Playwright, esbuild, shellcheck.
+**Tech Stack:** Node 24 LTS (dev works on Node 22.13+), TypeScript 5, Fastify 5, `node:sqlite`, `node:crypto` (scrypt, AES-256-GCM), zod 4, Vitest 4, React 19, Vite 8, Tailwind 4, `@cloudflare/kumo` 2.14.0, `@phosphor-icons/react`, TanStack Query 5, react-router 7, react-i18next, Playwright, esbuild, shellcheck.
 
 **Spec:** `docs/superpowers/specs/2026-09-22-cloudflared-manager-design.md`
 
-## Desvios aprovados em relação à spec (decididos no planejamento)
+## Approved deviations from the spec (decided during planning)
 
-| Spec | Plano | Motivo |
+| Spec | Plan | Reason |
 |---|---|---|
-| SDK oficial `cloudflare` | Cliente REST próprio com `fetch` (`apps/server/src/cloudflare/`) | São ~12 endpoints; o SDK tem 7 MB; testar contra um fake HTTP é mais simples. |
-| `better-sqlite3` | `node:sqlite` (`DatabaseSync`) | Sem módulo nativo → tarball único para x64/arm64, nada compilado no container. |
-| argon2 | `crypto.scrypt` (N=16384, r=8, p=1, salt 16 B, key 64 B) | Idem; scrypt é um KDF de senha adequado. |
-| Tarballs por arquitetura | Um tarball só | Consequência das duas linhas acima. |
-| Node 22 LTS | Node 24 LTS no LXC | `node:sqlite` mais maduro; 24 é a LTS ativa em 2026-09. |
-| `msw` | Fake da API Cloudflare em memória (`apps/server/test/fake-cloudflare.ts`) | O mesmo fake serve aos testes unitários e ao e2e. |
-| Rotas editadas por item (`POST/PUT/DELETE /routes/:index`) | Lista inteira com versão otimista (`PUT /api/tunnels/:id/routes` com `version`) | Cobre adicionar, editar, remover e reordenar num único caminho transacional com rollback. |
+| Official `cloudflare` SDK | Our own REST client with `fetch` (`apps/server/src/cloudflare/`) | There are ~12 endpoints; the SDK is 7 MB; testing against a fake HTTP server is simpler. |
+| `better-sqlite3` | `node:sqlite` (`DatabaseSync`) | No native module → a single tarball for x64/arm64, nothing compiled in the container. |
+| argon2 | `crypto.scrypt` (N=16384, r=8, p=1, salt 16 B, key 64 B) | Same reason; scrypt is a suitable password KDF. |
+| Per-architecture tarballs | A single tarball | Consequence of the two rows above. |
+| Node 22 LTS | Node 24 LTS in the LXC | `node:sqlite` is more mature; 24 is the active LTS as of 2026-09. |
+| `msw` | In-memory fake of the Cloudflare API (`apps/server/test/fake-cloudflare.ts`) | The same fake serves both unit tests and e2e. |
+| Routes edited per item (`POST/PUT/DELETE /routes/:index`) | Whole list with optimistic versioning (`PUT /api/tunnels/:id/routes` with `version`) | Covers add, edit, remove and reorder in a single transactional path with rollback. |
 
 ## Global Constraints
 
-- Idioma: código, comentários, nomes de arquivos, commits e strings em **inglês**; arquivos `.md` em **pt-BR**. Mensagens de UI via i18n `en` + `pt-BR`.
-- Commits terminam com `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`.
-- Túneis sempre criados com `config_src: "cloudflare"`.
-- Permissões do token: Account → Cloudflare Tunnel → Edit; Zone → DNS → Edit; Zone → Zone → Read; todas as zonas.
-- Token Cloudflare cifrado com AES-256-GCM; chave em `${ETC_DIR}/secret.key` (32 bytes, modo 0600); nunca retornado à UI (apenas os 4 últimos caracteres).
-- `.env` de túnel: `${ETC_DIR}/tunnels/<uuid>.env`, modo 0600, com `TUNNEL_TOKEN`, `TUNNEL_METRICS=127.0.0.1:<port>`, `TUNNEL_LOGLEVEL`, `TUNNEL_TRANSPORT_PROTOCOL`.
-- Unit: `cloudflared@<uuid>.service`. O id do túnel é validado como UUID antes de virar nome de unit ou de arquivo.
-- Portas de métricas: a partir de 20241, únicas por túnel.
-- Watchdog: intervalo 30 s; tolerância padrão 2 min; backoff 30 s → 10 min (dobra a cada tentativa); `failing` após 5 restarts seguidos; sem conectividade com `api.cloudflare.com:443` não conta restart.
-- Catch-all `http_status:404` sempre é a última regra do ingress e não é editável.
+- Language: code, comments, file names, commits and strings in **English**; `.md` files in **pt-BR**. UI messages via i18n `en` + `pt-BR`.
+- Commits end with `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`.
+- Tunnels are always created with `config_src: "cloudflare"`.
+- Token permissions: Account → Cloudflare Tunnel → Edit; Zone → DNS → Edit; Zone → Zone → Read; all zones.
+- Cloudflare token encrypted with AES-256-GCM; key at `${ETC_DIR}/secret.key` (32 bytes, mode 0600); never returned to the UI (only the last 4 characters).
+- Tunnel `.env`: `${ETC_DIR}/tunnels/<uuid>.env`, mode 0600, with `TUNNEL_TOKEN`, `TUNNEL_METRICS=127.0.0.1:<port>`, `TUNNEL_LOGLEVEL`, `TUNNEL_TRANSPORT_PROTOCOL`.
+- Unit: `cloudflared@<uuid>.service`. The tunnel id is validated as a UUID before becoming a unit or file name.
+- Metrics ports: starting at 20241, unique per tunnel.
+- Watchdog: 30 s interval; default tolerance 2 min; backoff 30 s → 10 min (doubles each attempt); `failing` after 5 consecutive restarts; no connectivity to `api.cloudflare.com:443` does not count as a restart.
+- The `http_status:404` catch-all is always the last ingress rule and is not editable.
 - CNAME: `<hostname> → <tunnelId>.cfargotunnel.com`, `proxied: true`, `comment: "managed by cloudflared-manager"`.
-- Sessão: cookie `tm_session`, `httpOnly`, `SameSite=Strict`, 7 dias; login com rate limit de 5/min por IP; senha com mínimo de 12 caracteres.
-- Erros da API: `{ code, message, details? }`.
-- Eventos: retenção de 30 dias.
-- Porta HTTP padrão 8080. LXC padrão: Debian 13, 1 vCPU, 1024 MB, 4 GB, não-privilegiado, `var_arm64=yes`, tags `network;cloudflare`.
-- Kumo: tokens semânticos apenas (`bg-kumo-*`, `text-kumo-*`), sem prefixo `dark:`, ícones Phosphor, versão fixada `2.14.0`.
+- Session: `tm_session` cookie, `httpOnly`, `SameSite=Strict`, 7 days; login rate-limited to 5/min per IP; password with a minimum of 12 characters.
+- API errors: `{ code, message, details? }`.
+- Events: 30-day retention.
+- Default HTTP port 8080. Default LXC: Debian 13, 1 vCPU, 1024 MB, 4 GB, unprivileged, `var_arm64=yes`, tags `network;cloudflare`.
+- Kumo: semantic tokens only (`bg-kumo-*`, `text-kumo-*`), no `dark:` prefix, Phosphor icons, pinned version `2.14.0`.
 
 ## Review Focus
 
-1. **Hostname cuja zona não está na conta** (ex.: `app.outrodominio.com`): deve falhar com `ZONE_NOT_FOUND` antes de tocar no ingress. Teste na Task 7.
-2. **Ingress editado no painel Zero Trust enquanto a GUI está aberta**: salvar com `version` antiga deve dar `CONFIG_VERSION_CONFLICT`, não sobrescrever. Teste na Task 7.
-3. **Mesmo hostname usado em duas regras (paths diferentes) e uma é removida**: o CNAME não pode ser apagado enquanto outra regra usar o host. Teste na Task 7.
-4. **Queda de internet**: o watchdog não pode entrar em loop de restarts nem marcar `failing`. Teste na Task 8.
-5. **Excluir túnel com conexões ativas ou unit parada/inexistente**: a exclusão deve ser idempotente (parar a unit, limpar conexões, apagar DNS gerenciado, apagar túnel, remover unit/env) e tolerar partes que já não existem. Teste na Task 7.
+1. **Hostname whose zone is not in the account** (e.g. `app.anotherdomain.com`): must fail with `ZONE_NOT_FOUND` before touching the ingress. Tested in Task 7.
+2. **Ingress edited in the Zero Trust dashboard while the GUI is open**: saving with a stale `version` must produce `CONFIG_VERSION_CONFLICT`, not overwrite. Tested in Task 7.
+3. **Same hostname used in two rules (different paths) and one is removed**: the CNAME must not be deleted while another rule still uses the host. Tested in Task 7.
+4. **Internet outage**: the watchdog must not enter a restart loop or mark `failing`. Tested in Task 8.
+5. **Delete a tunnel with active connections or a stopped/nonexistent unit**: deletion must be idempotent (stop the unit, clear connections, delete managed DNS, delete the tunnel, remove unit/env) and tolerate parts that no longer exist. Tested in Task 7.
 
 ---
 
-## Estrutura de arquivos
+## File structure
 
 ```
 package.json, pnpm-workspace.yaml, tsconfig.base.json, .gitignore, .nvmrc
-packages/shared/src/index.ts          # re-exporta tudo
+packages/shared/src/index.ts          # re-exports everything
 packages/shared/src/errors.ts         # ErrorCode, ApiError shape
-packages/shared/src/schemas.ts        # zod: rotas, túneis, setup, settings
-packages/shared/src/types.ts          # tipos de resposta (TunnelSummary, TunnelDetail...)
-apps/server/src/config.ts             # leitura de env
+packages/shared/src/schemas.ts        # zod: routes, tunnels, setup, settings
+packages/shared/src/types.ts          # response types (TunnelSummary, TunnelDetail...)
+apps/server/src/config.ts             # reads env
 apps/server/src/errors.ts             # AppError
 apps/server/src/db/database.ts        # openDatabase + migrations
 apps/server/src/crypto/secret-box.ts  # AES-256-GCM + key file
 apps/server/src/auth/password.ts      # scrypt hash/verify
-apps/server/src/auth/sessions.ts      # sessões em SQLite
+apps/server/src/auth/sessions.ts      # sessions in SQLite
 apps/server/src/settings/settings-repo.ts
-apps/server/src/cloudflare/client.ts  # fetch + mapeamento de erros
-apps/server/src/cloudflare/api.ts     # endpoints tipados
+apps/server/src/cloudflare/client.ts  # fetch + error mapping
+apps/server/src/cloudflare/api.ts     # typed endpoints
 apps/server/src/cloudflare/types.ts
-apps/server/src/tunnels/ingress.ts    # funções puras de ingress/rotas
-apps/server/src/tunnels/zones.ts      # resolve zona por hostname
+apps/server/src/tunnels/ingress.ts    # pure ingress/route functions
+apps/server/src/tunnels/zones.ts      # resolves zone by hostname
 apps/server/src/tunnels/tunnel-repo.ts
 apps/server/src/tunnels/dns-repo.ts
 apps/server/src/tunnels/tunnel-service.ts
@@ -87,7 +87,7 @@ apps/server/src/metrics/sampler.ts
 apps/server/src/system/cloudflared-info.ts
 apps/server/src/system/origin-test.ts
 apps/server/src/http/app.ts
-apps/server/src/http/context.ts       # AppContext (injeção de dependências)
+apps/server/src/http/context.ts       # AppContext (dependency injection)
 apps/server/src/http/routes/*.ts
 apps/server/src/main.ts
 apps/server/test/fake-cloudflare.ts
@@ -110,7 +110,7 @@ README.md, docs/manual-test-checklist.md
 
 ---
 
-### Task 1: Monorepo e pacote `shared`
+### Task 1: Monorepo and `shared` package
 
 **Files:**
 - Create: `package.json`, `pnpm-workspace.yaml`, `tsconfig.base.json`, `.gitignore`, `.nvmrc`
@@ -119,12 +119,12 @@ README.md, docs/manual-test-checklist.md
 
 **Interfaces:**
 - Produces:
-  - `ErrorCode` (union de strings): `CF_UNREACHABLE | CF_TOKEN_INVALID | CF_PERMISSION_MISSING | CF_RATE_LIMITED | CF_API_ERROR | CF_NOT_CONNECTED | ACCOUNT_SELECTION_REQUIRED | DNS_CONFLICT | ZONE_NOT_FOUND | CONFIG_VERSION_CONFLICT | TUNNEL_NOT_FOUND | TUNNEL_NOT_MANAGED | TUNNEL_NOT_REMOTE | SERVICE_COMMAND_FAILED | VALIDATION_ERROR | UNAUTHORIZED | SETUP_ALREADY_DONE | INVALID_CREDENTIALS | RATE_LIMITED | INTERNAL`
+  - `ErrorCode` (string union): `CF_UNREACHABLE | CF_TOKEN_INVALID | CF_PERMISSION_MISSING | CF_RATE_LIMITED | CF_API_ERROR | CF_NOT_CONNECTED | ACCOUNT_SELECTION_REQUIRED | DNS_CONFLICT | ZONE_NOT_FOUND | CONFIG_VERSION_CONFLICT | TUNNEL_NOT_FOUND | TUNNEL_NOT_MANAGED | TUNNEL_NOT_REMOTE | SERVICE_COMMAND_FAILED | VALIDATION_ERROR | UNAUTHORIZED | SETUP_ALREADY_DONE | INVALID_CREDENTIALS | RATE_LIMITED | INTERNAL`
   - `ApiErrorBody = { code: ErrorCode; message: string; details?: unknown }`
   - zod: `routeSchema`, `routesUpdateSchema`, `createTunnelSchema`, `updateTunnelSchema`, `adminSetupSchema`, `loginSchema`, `changePasswordSchema`, `cloudflareTokenSchema`, `testOriginSchema`, `backupSchema`, `uuidSchema`
-  - tipos: `Route`, `OriginRequest`, `TunnelSummary`, `TunnelDetail`, `LocalState`, `EdgeStatus`, `WatchdogState`, `TunnelSettings`, `TunnelEvent`, `Zone`, `CloudflareStatus`, `SetupStatus`, `MetricsSnapshot`, `CloudflaredVersionInfo`
+  - types: `Route`, `OriginRequest`, `TunnelSummary`, `TunnelDetail`, `LocalState`, `EdgeStatus`, `WatchdogState`, `TunnelSettings`, `TunnelEvent`, `Zone`, `CloudflareStatus`, `SetupStatus`, `MetricsSnapshot`, `CloudflaredVersionInfo`
 
-- [ ] **Step 1: Criar arquivos de workspace**
+- [ ] **Step 1: Create workspace files**
 
 `package.json`:
 ```json
@@ -187,7 +187,7 @@ playwright-report/
 
 `.nvmrc`: `24`
 
-- [ ] **Step 2: Pacote `shared`**
+- [ ] **Step 2: `shared` package**
 
 `packages/shared/package.json`:
 ```json
@@ -218,7 +218,7 @@ export type ErrorCode = (typeof ERROR_CODES)[number];
 export interface ApiErrorBody { code: ErrorCode; message: string; details?: unknown }
 ```
 
-- [ ] **Step 3: Escrever testes que falham** — `packages/shared/src/schemas.test.ts`:
+- [ ] **Step 3: Write failing tests** — `packages/shared/src/schemas.test.ts`:
 ```ts
 import { describe, expect, it } from 'vitest';
 import { routeSchema, routesUpdateSchema, adminSetupSchema, uuidSchema } from './schemas';
@@ -271,12 +271,12 @@ describe('uuidSchema', () => {
 });
 ```
 
-- [ ] **Step 4: Rodar e ver falhar**
+- [ ] **Step 4: Run and see it fail**
 
 Run: `pnpm install && pnpm --filter @tm/shared test`
 Expected: FAIL — `Cannot find module './schemas'`
 
-- [ ] **Step 5: Implementar `schemas.ts`, `types.ts`, `index.ts`**
+- [ ] **Step 5: Implement `schemas.ts`, `types.ts`, `index.ts`**
 
 `packages/shared/src/schemas.ts`:
 ```ts
@@ -409,13 +409,13 @@ export * from './schemas';
 export * from './types';
 ```
 
-- [ ] **Step 6: Rodar testes** — `pnpm --filter @tm/shared test` → PASS; `pnpm --filter @tm/shared typecheck` → sem erros.
+- [ ] **Step 6: Run tests** — `pnpm --filter @tm/shared test` → PASS; `pnpm --filter @tm/shared typecheck` → no errors.
 
 - [ ] **Step 7: Commit** — `git add -A && git commit -m "chore: scaffold monorepo and shared schemas"`
 
 ---
 
-### Task 2: Server — config, banco, cifragem
+### Task 2: Server — config, database, encryption
 
 **Files:**
 - Create: `apps/server/{package.json,tsconfig.json,vitest.config.ts}`, `apps/server/src/config.ts`, `apps/server/src/errors.ts`, `apps/server/src/db/database.ts`, `apps/server/src/crypto/secret-box.ts`
@@ -423,9 +423,9 @@ export * from './types';
 
 **Interfaces:**
 - Produces:
-  - `loadConfig(env = process.env): AppConfig` com `{ port, host, dataDir, etcDir, serviceBackend: 'systemd'|'fake', webDist: string|null, cfApiBase, cookieSecure: boolean }`
+  - `loadConfig(env = process.env): AppConfig` with `{ port, host, dataDir, etcDir, serviceBackend: 'systemd'|'fake', webDist: string|null, cfApiBase, cookieSecure: boolean }`
   - `class AppError extends Error { constructor(code: ErrorCode, message: string, status: number, details?: unknown) }`
-  - `openDatabase(path: string): Db` onde `type Db = DatabaseSync`; aplica migrações
+  - `openDatabase(path: string): Db` where `type Db = DatabaseSync`; applies migrations
   - `loadOrCreateKey(path: string): Buffer`; `encrypt(key: Buffer, plain: string): string`; `decrypt(key: Buffer, boxed: string): string`
 
 - [ ] **Step 1: `apps/server/package.json`**
@@ -458,9 +458,9 @@ export * from './types';
 import { defineConfig } from 'vitest/config';
 export default defineConfig({ test: { include: ['src/**/*.test.ts', 'test/**/*.test.ts'], execArgv: ['--disable-warning=ExperimentalWarning'] } });
 ```
-(Se `execArgv` não for aceito pela versão do Vitest, usar `NODE_OPTIONS=--disable-warning=ExperimentalWarning` no script `test`.)
+(If `execArgv` is not accepted by the installed Vitest version, use `NODE_OPTIONS=--disable-warning=ExperimentalWarning` in the `test` script.)
 
-- [ ] **Step 2: Testes que falham**
+- [ ] **Step 2: Failing tests**
 
 `apps/server/src/crypto/secret-box.test.ts`:
 ```ts
@@ -511,9 +511,9 @@ describe('openDatabase', () => {
 });
 ```
 
-- [ ] **Step 3: Rodar** — `pnpm install && pnpm --filter @tm/server test` → FAIL (módulos inexistentes).
+- [ ] **Step 3: Run** — `pnpm install && pnpm --filter @tm/server test` → FAIL (missing modules).
 
-- [ ] **Step 4: Implementar**
+- [ ] **Step 4: Implement**
 
 `apps/server/src/errors.ts`:
 ```ts
@@ -627,12 +627,12 @@ export function openDatabase(path: string): Db {
 }
 ```
 
-- [ ] **Step 5: Rodar** — `pnpm --filter @tm/server test` → PASS.
+- [ ] **Step 5: Run** — `pnpm --filter @tm/server test` → PASS.
 - [ ] **Step 6: Commit** — `git add -A && git commit -m "feat(server): add config, sqlite migrations and secret box"`
 
 ---
 
-### Task 3: Server — senha, sessões e settings
+### Task 3: Server — password, sessions and settings
 
 **Files:**
 - Create: `apps/server/src/auth/password.ts`, `apps/server/src/auth/sessions.ts`, `apps/server/src/settings/settings-repo.ts`
@@ -641,12 +641,12 @@ export function openDatabase(path: string): Db {
 **Interfaces:**
 - Consumes: `openDatabase`, `encrypt/decrypt`
 - Produces:
-  - `hashPassword(pw: string): Promise<string>` (formato `scrypt$<saltB64>$<hashB64>`), `verifyPassword(pw: string, stored: string): Promise<boolean>`
+  - `hashPassword(pw: string): Promise<string>` (format `scrypt$<saltB64>$<hashB64>`), `verifyPassword(pw: string, stored: string): Promise<boolean>`
   - `class AdminRepo { constructor(db: Db); exists(): boolean; create(username, hash): void; get(): {username, passwordHash} | null; setPasswordHash(hash): void }`
   - `class SessionStore { constructor(db: Db, ttlMs = 7*24*3600e3, now = Date.now); create(): string; validate(token: string): boolean; revoke(token: string): void; revokeAll(): void }`
   - `class SettingsRepo { constructor(db: Db, key: Buffer); getCloudflare(): { token: string; accountId: string; accountName: string } | null; setCloudflare(v): void; tokenSuffix(): string | null; get(key): string | null; set(key, value): void }`
 
-- [ ] **Step 1: Testes que falham** — `apps/server/src/auth/auth.test.ts`:
+- [ ] **Step 1: Failing tests** — `apps/server/src/auth/auth.test.ts`:
 ```ts
 import { describe, expect, it } from 'vitest';
 import { openDatabase } from '../db/database';
@@ -719,9 +719,9 @@ describe('SettingsRepo', () => {
 });
 ```
 
-- [ ] **Step 2: Rodar** — `pnpm --filter @tm/server test` → FAIL.
+- [ ] **Step 2: Run** — `pnpm --filter @tm/server test` → FAIL.
 
-- [ ] **Step 3: Implementar**
+- [ ] **Step 3: Implement**
 
 `apps/server/src/auth/password.ts`:
 ```ts
@@ -812,12 +812,12 @@ export class SettingsRepo {
 }
 ```
 
-- [ ] **Step 4: Rodar** — PASS.
-- [ ] **Step 5: Commit** — `git commit -am "feat(server): add password hashing, sessions and settings repo"` (usar `git add -A` antes).
+- [ ] **Step 4: Run** — PASS.
+- [ ] **Step 5: Commit** — `git commit -am "feat(server): add password hashing, sessions and settings repo"` (use `git add -A` first).
 
 ---
 
-### Task 4: Cliente da API Cloudflare + fake em memória
+### Task 4: Cloudflare API client + in-memory fake
 
 **Files:**
 - Create: `apps/server/src/cloudflare/{types.ts,client.ts,api.ts}`, `apps/server/test/fake-cloudflare.ts`
@@ -825,28 +825,28 @@ export class SettingsRepo {
 
 **Interfaces:**
 - Produces:
-  - `class CfClient { constructor(opts: { token: string; baseUrl: string; fetch?: typeof fetch }); request<T>(method, path, body?): Promise<T>; paginate<T>(path): Promise<T[]> }` — desembrulha `{ success, result, errors }` e mapeia erros:
-    - rede/timeout (10 s) → `CF_UNREACHABLE` (502)
-    - 401, ou erro com code 1000/9109/6003/10000 e 401/403 com "Invalid" → `CF_TOKEN_INVALID` (401)
+  - `class CfClient { constructor(opts: { token: string; baseUrl: string; fetch?: typeof fetch }); request<T>(method, path, body?): Promise<T>; paginate<T>(path): Promise<T[]> }` — unwraps `{ success, result, errors }` and maps errors:
+    - network/timeout (10 s) → `CF_UNREACHABLE` (502)
+    - 401, or an error with code 1000/9109/6003/10000 and 401/403 with "Invalid" → `CF_TOKEN_INVALID` (401)
     - 403 → `CF_PERMISSION_MISSING` (403)
     - 429 → `CF_RATE_LIMITED` (429)
-    - 404 → `TUNNEL_NOT_FOUND` só quando o path contém `/cfd_tunnel/`; senão `CF_API_ERROR` (502)
-    - outros → `CF_API_ERROR` (502) com `details: errors`
-  - `class CfApi { constructor(client: CfClient, accountId: string) }` com:
+    - 404 → `TUNNEL_NOT_FOUND` only when the path contains `/cfd_tunnel/`; otherwise `CF_API_ERROR` (502)
+    - other → `CF_API_ERROR` (502) with `details: errors`
+  - `class CfApi { constructor(client: CfClient, accountId: string) }` with:
     - `static verifyToken(client): Promise<{ status: string }>` (`GET /user/tokens/verify`)
     - `static listAccounts(client): Promise<CfAccount[]>` (`GET /accounts`)
-    - `listZones(): Promise<CfZone[]>` (`GET /zones?account.id=…&per_page=50` paginado)
-    - `listTunnels(): Promise<CfTunnel[]>` (`GET /accounts/{a}/cfd_tunnel?is_deleted=false&per_page=100` paginado)
+    - `listZones(): Promise<CfZone[]>` (`GET /zones?account.id=…&per_page=50` paginated)
+    - `listTunnels(): Promise<CfTunnel[]>` (`GET /accounts/{a}/cfd_tunnel?is_deleted=false&per_page=100` paginated)
     - `getTunnel(id)`, `createTunnel(name)` (`POST … { name, config_src: 'cloudflare' }`), `renameTunnel(id, name)` (`PATCH`), `deleteTunnel(id)` (`DELETE`), `cleanupConnections(id)` (`DELETE …/connections`)
     - `getTunnelToken(id): Promise<string>`
     - `getConfig(id): Promise<{ version: number; config: CfTunnelConfig }>` (`GET …/configurations`)
     - `putConfig(id, config: CfTunnelConfig): Promise<{ version: number }>` (`PUT …/configurations { config }`)
     - `findDnsRecords(zoneId, name): Promise<CfDnsRecord[]>` (`GET /zones/{z}/dns_records?name.exact=…`)
     - `createCname(zoneId, name, target): Promise<CfDnsRecord>`; `updateCname(zoneId, recordId, name, target)`; `deleteDnsRecord(zoneId, recordId)`
-  - tipos `CfAccount {id,name}`, `CfZone {id,name,status}`, `CfTunnel {id,name,created_at,deleted_at,status,config_src,connections: CfConnection[]}`, `CfConnection {colo_name,opened_at,origin_ip,client_version,is_pending_reconnect}`, `CfTunnelConfig { ingress: CfIngressRule[]; originRequest?: object; 'warp-routing'?: object }`, `CfIngressRule { hostname?, path?, service, originRequest? }`, `CfDnsRecord {id,name,type,content,proxied,comment?}`
-  - Test helper `startFakeCloudflare(): Promise<FakeCf>` com `{ baseUrl, state, close(), token }`. `state` expõe `accounts`, `zones`, `tunnels: Map<id, {tunnel, config, version, token}>`, `dns: Map<zoneId, CfDnsRecord[]>`, `failNext(pathRegex, status, errors)` para injeção de falhas.
+  - types `CfAccount {id,name}`, `CfZone {id,name,status}`, `CfTunnel {id,name,created_at,deleted_at,status,config_src,connections: CfConnection[]}`, `CfConnection {colo_name,opened_at,origin_ip,client_version,is_pending_reconnect}`, `CfTunnelConfig { ingress: CfIngressRule[]; originRequest?: object; 'warp-routing'?: object }`, `CfIngressRule { hostname?, path?, service, originRequest? }`, `CfDnsRecord {id,name,type,content,proxied,comment?}`
+  - Test helper `startFakeCloudflare(): Promise<FakeCf>` with `{ baseUrl, state, close(), token }`. `state` exposes `accounts`, `zones`, `tunnels: Map<id, {tunnel, config, version, token}>`, `dns: Map<zoneId, CfDnsRecord[]>`, `failNext(pathRegex, status, errors)` for fault injection.
 
-- [ ] **Step 1: Fake da Cloudflare** — `apps/server/test/fake-cloudflare.ts`:
+- [ ] **Step 1: Cloudflare fake** — `apps/server/test/fake-cloudflare.ts`:
 ```ts
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { randomUUID } from 'node:crypto';
@@ -960,7 +960,7 @@ export async function startFakeCloudflare() {
 export type FakeCf = Awaited<ReturnType<typeof startFakeCloudflare>>;
 ```
 
-- [ ] **Step 2: Testes que falham** — `apps/server/src/cloudflare/api.test.ts`:
+- [ ] **Step 2: Failing tests** — `apps/server/src/cloudflare/api.test.ts`:
 ```ts
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FAKE_ACCOUNT, startFakeCloudflare, type FakeCf } from '../../test/fake-cloudflare';
@@ -1021,9 +1021,9 @@ describe('CfApi', () => {
 });
 ```
 
-- [ ] **Step 3: Rodar** — FAIL.
+- [ ] **Step 3: Run** — FAIL.
 
-- [ ] **Step 4: Implementar**
+- [ ] **Step 4: Implement**
 
 `apps/server/src/cloudflare/types.ts`:
 ```ts
@@ -1146,12 +1146,12 @@ export class CfApi {
 }
 ```
 
-- [ ] **Step 5: Rodar** — PASS.
+- [ ] **Step 5: Run** — PASS.
 - [ ] **Step 6: Commit** — `git add -A && git commit -m "feat(server): add Cloudflare REST client and in-memory fake"`
 
 ---
 
-### Task 5: Funções puras de ingress e zonas
+### Task 5: Pure ingress and zone functions
 
 **Files:**
 - Create: `apps/server/src/tunnels/ingress.ts`, `apps/server/src/tunnels/zones.ts`
@@ -1159,13 +1159,13 @@ export class CfApi {
 
 **Interfaces:**
 - Produces:
-  - `configToRoutes(config: CfTunnelConfig): Route[]` — remove a última regra se não tiver `hostname` (catch-all); regras sem hostname no meio são mantidas fora (ignoradas) e contadas em `ignoredRules`.
-  - `routesToConfig(routes: Route[], base: CfTunnelConfig): CfTunnelConfig` — preserva `originRequest` e `warp-routing` globais do `base`, adiciona `{ service: 'http_status:404' }` no fim.
-  - `diffHostnames(before: Route[], after: Route[]): { added: string[]; removed: string[] }` — por hostname único (um host usado por várias regras só é "removido" quando nenhuma regra o usa).
-  - `findZoneForHostname(hostname: string, zones: {id,name}[]): {id,name} | null` — sufixo mais longo; `*.example.com` casa com `example.com`.
+  - `configToRoutes(config: CfTunnelConfig): Route[]` — removes the last rule if it has no `hostname` (catch-all); rules without a hostname in the middle are kept out (ignored) and counted in `ignoredRules`.
+  - `routesToConfig(routes: Route[], base: CfTunnelConfig): CfTunnelConfig` — preserves the global `originRequest` and `warp-routing` from `base`, appends `{ service: 'http_status:404' }` at the end.
+  - `diffHostnames(before: Route[], after: Route[]): { added: string[]; removed: string[] }` — by unique hostname (a host used by several rules is only "removed" when no rule uses it anymore).
+  - `findZoneForHostname(hostname: string, zones: {id,name}[]): {id,name} | null` — longest suffix match; `*.example.com` matches `example.com`.
   - `tunnelTarget(tunnelId: string): string` → `${tunnelId}.cfargotunnel.com`
 
-- [ ] **Step 1: Testes que falham** — `apps/server/src/tunnels/ingress.test.ts`:
+- [ ] **Step 1: Failing tests** — `apps/server/src/tunnels/ingress.test.ts`:
 ```ts
 import { describe, expect, it } from 'vitest';
 import { configToRoutes, diffHostnames, routesToConfig } from './ingress';
@@ -1218,9 +1218,9 @@ describe('findZoneForHostname', () => {
 });
 ```
 
-- [ ] **Step 2: Rodar** — FAIL.
+- [ ] **Step 2: Run** — FAIL.
 
-- [ ] **Step 3: Implementar**
+- [ ] **Step 3: Implement**
 
 `apps/server/src/tunnels/ingress.ts`:
 ```ts
@@ -1274,12 +1274,12 @@ export function findZoneForHostname<Z extends { id: string; name: string }>(host
 }
 ```
 
-- [ ] **Step 4: Rodar** — PASS.
+- [ ] **Step 4: Run** — PASS.
 - [ ] **Step 5: Commit** — `git add -A && git commit -m "feat(server): add ingress and zone helpers"`
 
 ---
 
-### Task 6: Service backend (systemd + fake) e arquivo `.env`
+### Task 6: Service backend (systemd + fake) and the `.env` file
 
 **Files:**
 - Create: `apps/server/src/services/{backend.ts,env-file.ts,systemd-backend.ts,fake-backend.ts}`
@@ -1293,26 +1293,26 @@ export interface UnitStatus { state: LocalState; activeSince: string | null; res
 export interface LogLine { time: string; level: 'debug'|'info'|'warn'|'error'|'fatal'; message: string }
 export interface ServiceBackend {
   install(tunnelId: string, env: TunnelEnv): Promise<void>;   // escreve .env (0600) e `enable`
-  updateEnv(tunnelId: string, env: TunnelEnv): Promise<void>; // reescreve .env (sem restart)
+  updateEnv(tunnelId: string, env: TunnelEnv): Promise<void>; // rewrites .env (no restart)
   uninstall(tunnelId: string): Promise<void>;                 // stop + disable + remove .env; idempotente
   isInstalled(tunnelId: string): boolean;                     // .env existe
   start(id: string): Promise<void>; stop(id: string): Promise<void>; restart(id: string): Promise<void>;
   status(id: string): Promise<UnitStatus>;
   logs(id: string, lines: number): Promise<LogLine[]>;
-  followLogs(id: string, onLine: (l: LogLine) => void): () => void; // retorna unsubscribe
+  followLogs(id: string, onLine: (l: LogLine) => void): () => void; // returns unsubscribe
   cloudflaredVersion(): Promise<string | null>;
   upgradeCloudflared(): Promise<void>;
 }
 export function renderEnvFile(env: TunnelEnv): string;
 export function parseEnvFile(text: string): TunnelEnv;
-export function envFilePath(etcDir: string, tunnelId: string): string; // valida UUID; lança VALIDATION_ERROR
+export function envFilePath(etcDir: string, tunnelId: string): string; // validates UUID; throws VALIDATION_ERROR
 export function parseJournalLine(json: string): LogLine | null;
 export class SystemdBackend implements ServiceBackend { constructor(etcDir: string, run?: Runner) }
 export type Runner = (cmd: string, args: string[]) => Promise<{ stdout: string; stderr: string; code: number }>;
 export class FakeBackend implements ServiceBackend { constructor(etcDir: string); readonly calls: string[]; setState(id, state: LocalState): void; emitLog(id, line: LogLine): void }
 ```
 
-- [ ] **Step 1: Testes que falham** — `apps/server/src/services/services.test.ts`:
+- [ ] **Step 1: Failing tests** — `apps/server/src/services/services.test.ts`:
 ```ts
 import { describe, expect, it } from 'vitest';
 import { mkdtempSync, readFileSync, statSync, existsSync } from 'node:fs';
@@ -1400,11 +1400,11 @@ describe('FakeBackend', () => {
   });
 });
 ```
-(Nota: o timestamp `1758535200000000` µs = 2025-09-22T10:00:00Z; o teste confere a conversão de µs para ISO.)
+(Note: the timestamp `1758535200000000` µs = 2025-09-22T10:00:00Z; the test checks the µs-to-ISO conversion.)
 
-- [ ] **Step 2: Rodar** — FAIL.
+- [ ] **Step 2: Run** — FAIL.
 
-- [ ] **Step 3: Implementar**
+- [ ] **Step 3: Implement**
 
 `apps/server/src/services/backend.ts`:
 ```ts
@@ -1617,12 +1617,12 @@ export class FakeBackend implements ServiceBackend {
 }
 ```
 
-- [ ] **Step 4: Rodar** — PASS.
+- [ ] **Step 4: Run** — PASS.
 - [ ] **Step 5: Commit** — `git add -A && git commit -m "feat(server): add systemd and fake service backends"`
 
 ---
 
-### Task 7: Orquestração de túneis (`TunnelService`)
+### Task 7: Tunnel orchestration (`TunnelService`)
 
 **Files:**
 - Create: `apps/server/src/tunnels/{tunnel-repo.ts,dns-repo.ts,tunnel-service.ts}`, `apps/server/src/events/event-repo.ts`, `apps/server/test/helpers.ts`
@@ -1645,29 +1645,29 @@ export class TunnelService {
   list(): Promise<TunnelSummary[]>;
   get(id: string): Promise<TunnelDetail>;
   create(name: string): Promise<TunnelSummary>;           // cria, instala, inicia
-  adopt(id: string): Promise<TunnelSummary>;              // só config_src cloudflare; instala e inicia
-  update(id: string, patch: UpdateTunnel): Promise<TunnelSummary>; // rename via API; restante local; logLevel/protocol => updateEnv + restart se ativo
+  adopt(id: string): Promise<TunnelSummary>;              // config_src cloudflare only; installs and starts
+  update(id: string, patch: UpdateTunnel): Promise<TunnelSummary>; // rename via API; the rest is local; logLevel/protocol => updateEnv + restart if active
   start(id): Promise<void>; stop(id): Promise<void>; restart(id): Promise<void>;
   delete(id: string): Promise<void>;
   updateRoutes(id: string, input: RoutesUpdate): Promise<TunnelDetail>;
 }
 ```
-`api` é uma função (lazy) porque as credenciais podem mudar em runtime; ela lança `CF_NOT_CONNECTED` (409) se não houver token.
+`api` is a (lazy) function because credentials can change at runtime; it throws `CF_NOT_CONNECTED` (409) if there's no token.
 
-Regras do `updateRoutes` (na ordem):
-1. `getConfig` → se `version !== input.version` → `CONFIG_VERSION_CONFLICT` (409, `details: { currentVersion }`).
-2. `zones = listZones()`; para cada rota, `findZoneForHostname`; se nenhuma → `ZONE_NOT_FOUND` (400, `details: { hostnames }`).
-3. `{added, removed} = diffHostnames(before, after)`. Para cada `added`: `findDnsRecords`. Se não existir registro → cria. Se existir CNAME com `content === tunnelTarget(id)` → reaproveita (upsert em `managed_dns`). Se existir outro destino e o host não estiver em `overwriteDns` → junta em `conflicts`. Se houver conflitos → `DNS_CONFLICT` (409, `details: { hostnames: conflicts }`) **antes** de qualquer escrita.
+`updateRoutes` rules (in order):
+1. `getConfig` → if `version !== input.version` → `CONFIG_VERSION_CONFLICT` (409, `details: { currentVersion }`).
+2. `zones = listZones()`; for each route, `findZoneForHostname`; if none found → `ZONE_NOT_FOUND` (400, `details: { hostnames }`).
+3. `{added, removed} = diffHostnames(before, after)`. For each `added`: `findDnsRecords`. If no record exists → create it. If a CNAME exists with `content === tunnelTarget(id)` → reuse it (upsert into `managed_dns`). If another destination exists and the host isn't in `overwriteDns` → add it to `conflicts`. If there are conflicts → `DNS_CONFLICT` (409, `details: { hostnames: conflicts }`) **before** any write.
 4. `putConfig(routesToConfig(after, before))`.
-5. DNS dos `added`: cria (ou `updateCname` se overwrite). Em qualquer falha: `putConfig(beforeConfig)` (rollback), apaga os CNAMEs criados nesta chamada, relança o erro.
-6. DNS dos `removed`: para cada host em `managed_dns` desse túnel e não em `keepDns`, `deleteDnsRecord` (404 ignorado) e remove do repo. Falha aqui não desfaz o ingress; é registrada como evento `config-changed` com aviso e segue.
-7. Evento `config-changed`; retorna `get(id)`.
+5. DNS for `added`: create (or `updateCname` if overwriting). On any failure: `putConfig(beforeConfig)` (rollback), delete the CNAMEs created in this call, rethrow the error.
+6. DNS for `removed`: for each host in this tunnel's `managed_dns` that is not in `keepDns`, `deleteDnsRecord` (404 ignored) and remove it from the repo. A failure here does not undo the ingress; it is recorded as a `config-changed` event with a warning and continues.
+7. `config-changed` event; returns `get(id)`.
 
-Regras do `delete` (idempotente): se instalado → `backend.uninstall`; `cleanupConnections` (erros ignorados exceto `CF_UNREACHABLE`/`CF_TOKEN_INVALID`); para cada `managed_dns` do túnel → `deleteDnsRecord` (404 ignorado) e remove do repo; `deleteTunnel` (`TUNNEL_NOT_FOUND` ignorado); `tunnels.delete(id)`; evento `deleted`.
+`delete` rules (idempotent): if installed → `backend.uninstall`; `cleanupConnections` (errors ignored except `CF_UNREACHABLE`/`CF_TOKEN_INVALID`); for each `managed_dns` entry of the tunnel → `deleteDnsRecord` (404 ignored) and remove it from the repo; `deleteTunnel` (`TUNNEL_NOT_FOUND` ignored); `tunnels.delete(id)`; `deleted` event.
 
-Status combinado em `list()`: `listTunnels()` da API; para cada túnel, `local = backend.status(id)`, `settings` do repo (null se não gerenciado aqui), `routeCount` via `getConfig` **apenas** para túneis `managedHere` (evita N chamadas; os demais mostram 0), `watchdog = row?.keepAlive === false ? 'disabled' : row?.watchdogState ?? 'disabled'`. Túneis no repo que não vêm mais da API (apagados pelo painel) aparecem com `edgeStatus: 'down'`, `name: '(deleted in Cloudflare)'`, `remote: true`, para que o usuário possa excluí-los localmente.
+Combined status in `list()`: `listTunnels()` from the API; for each tunnel, `local = backend.status(id)`, `settings` from the repo (null if not managed here), `routeCount` via `getConfig` **only** for `managedHere` tunnels (avoids N calls; the rest show 0), `watchdog = row?.keepAlive === false ? 'disabled' : row?.watchdogState ?? 'disabled'`. Tunnels in the repo that no longer come from the API (deleted from the dashboard) show up with `edgeStatus: 'down'`, `name: '(deleted in Cloudflare)'`, `remote: true`, so the user can delete them locally.
 
-- [ ] **Step 1: Helpers de teste** — `apps/server/test/helpers.ts`:
+- [ ] **Step 1: Test helpers** — `apps/server/test/helpers.ts`:
 ```ts
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -1693,7 +1693,7 @@ export async function makeTunnelEnv() {
 }
 ```
 
-- [ ] **Step 2: Testes que falham** — `apps/server/src/tunnels/tunnel-service.test.ts`:
+- [ ] **Step 2: Failing tests** — `apps/server/src/tunnels/tunnel-service.test.ts`:
 ```ts
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { makeTunnelEnv } from '../../test/helpers';
@@ -1833,9 +1833,9 @@ describe('update settings', () => {
 });
 ```
 
-- [ ] **Step 3: Rodar** — FAIL.
+- [ ] **Step 3: Run** — FAIL.
 
-- [ ] **Step 4: Implementar repos** — `apps/server/src/tunnels/tunnel-repo.ts`:
+- [ ] **Step 4: Implement repos** — `apps/server/src/tunnels/tunnel-repo.ts`:
 ```ts
 import type { LogLevel, Protocol, WatchdogState } from '@tm/shared';
 import type { Db } from '../db/database';
@@ -1911,9 +1911,9 @@ export class EventRepo {
   prune(maxAgeMs = 30 * 24 * 3600e3) { this.db.prepare('delete from events where created_at < ?').run(this.now() - maxAgeMs); }
 }
 ```
-Teste adicional no mesmo arquivo de teste de serviço não é necessário; `prune` é coberto na Task 8.
+An additional test in the same service test file is not necessary; `prune` is covered in Task 8.
 
-- [ ] **Step 5: Implementar `tunnel-service.ts`**
+- [ ] **Step 5: Implement `tunnel-service.ts`**
 ```ts
 import type { RoutesUpdate, TunnelDetail, TunnelSummary, UpdateTunnel, Route } from '@tm/shared';
 import type { CfApi } from '../cloudflare/api';
@@ -2111,7 +2111,7 @@ export class TunnelService {
 export type { Route };
 ```
 
-- [ ] **Step 6: Rodar** — `pnpm --filter @tm/server test` → PASS. Se algum teste falhar por detalhe do fake (ex.: `failNext` com regex `dns_records$` precisa casar a URL sem query), ajustar o teste/fake, não a regra de negócio.
+- [ ] **Step 6: Run** — `pnpm --filter @tm/server test` → PASS. If a test fails due to a fake detail (e.g. `failNext` with regex `dns_records$` needs to match the URL without the query string), adjust the test/fake, not the business rule.
 - [ ] **Step 7: Commit** — `git add -A && git commit -m "feat(server): add tunnel orchestration with DNS rollback"`
 
 ---
@@ -2139,21 +2139,21 @@ export class Watchdog { constructor(deps: { tunnels: TunnelRepo; backend: Servic
   tick(): Promise<void>; start(intervalMs = 30_000): void; stop(): void }
 ```
 
-Regras do `step`:
-- `failing`: não faz nada até sair de `failing` (a saída é via `start` manual, que zera o estado — Task 7).
-- `healthy` e saudável → nenhuma ação.
-- não saudável e `internet === false` → mantém/entra em `degraded` sem contar restart; ação `event-no-connectivity` somente na transição (quando `state` era `healthy`).
-- não saudável com internet: se `state === 'healthy'` → `degraded`, `degradedSince = now`, ação `event-degraded`.
-  - se `degraded` e `now - degradedSince >= toleranceMs` → `restarting`, `restartAttempts = 1`, `nextRestartAt = now + backoff(1)`, ação `restart`.
-  - se `restarting` e `now >= nextRestartAt`: se `restartAttempts >= MAX_RESTARTS` (5 restarts já feitos sem recuperar) → `failing` + `event-failing`; senão `restartAttempts++`, ação `restart`, `nextRestartAt = now + backoff(attempts)`.
+`step` rules:
+- `failing`: does nothing until it leaves `failing` (the exit is via a manual `start`, which resets the state — Task 7).
+- `healthy` and healthy → no action.
+- unhealthy and `internet === false` → stays/enters `degraded` without counting a restart; `event-no-connectivity` action only on the transition (when `state` was `healthy`).
+- unhealthy with internet: if `state === 'healthy'` → `degraded`, `degradedSince = now`, `event-degraded` action.
+  - if `degraded` and `now - degradedSince >= toleranceMs` → `restarting`, `restartAttempts = 1`, `nextRestartAt = now + backoff(1)`, `restart` action.
+  - if `restarting` and `now >= nextRestartAt`: if `restartAttempts >= MAX_RESTARTS` (5 restarts already done without recovering) → `failing` + `event-failing`; otherwise `restartAttempts++`, `restart` action, `nextRestartAt = now + backoff(attempts)`.
 - `backoff(n) = min(BASE * 2^(n-1), MAX)`.
-- saudável vindo de `degraded`/`restarting` → `healthy`, zera tudo, ação `event-recovered`.
+- healthy coming from `degraded`/`restarting` → `healthy`, resets everything, `event-recovered` action.
 
-`tick()`: `events.prune()`; `internet = await probeInternet()` (uma vez por tick); para cada `row` com `keepAlive` e `backend.isInstalled`: se `backend.status().state` for `inactive` (parado pelo usuário) → pula; `healthy = state === 'active' && await probeReady(row.metricsPort)`; aplica `step`, persiste `next` em `tunnels.update`, executa ações (`restart` → `backend.restart` + evento `watchdog-restart` "attempt N/5"; eventos mapeados para `watchdog-degraded`, `watchdog-recovered`, `watchdog-failing`, `no-connectivity`). Erros de um túnel não interrompem os outros.
+`tick()`: `events.prune()`; `internet = await probeInternet()` (once per tick); for each `row` with `keepAlive` and `backend.isInstalled`: if `backend.status().state` is `inactive` (stopped by the user) → skip; `healthy = state === 'active' && await probeReady(row.metricsPort)`; applies `step`, persists `next` in `tunnels.update`, runs actions (`restart` → `backend.restart` + `watchdog-restart` event "attempt N/5"; events mapped to `watchdog-degraded`, `watchdog-recovered`, `watchdog-failing`, `no-connectivity`). Errors on one tunnel don't interrupt the others.
 
-Observação: unit `failed` (systemd desistiu) conta como não saudável e é tratada pelo watchdog; `inactive` significa parado de propósito.
+Note: a `failed` unit (systemd gave up) counts as unhealthy and is handled by the watchdog; `inactive` means intentionally stopped.
 
-- [ ] **Step 1: Testes que falham** — `state-machine.test.ts`:
+- [ ] **Step 1: Failing tests** — `state-machine.test.ts`:
 ```ts
 import { describe, expect, it } from 'vitest';
 import { BASE_BACKOFF_MS, MAX_RESTARTS, step, type WdState } from './state-machine';
@@ -2211,7 +2211,7 @@ describe('watchdog state machine', () => {
   });
 });
 ```
-Para que o último teste passe, durante `internet === false` o `degradedSince` é **atualizado para `now`** a cada tick (a tolerância conta a partir da volta da conectividade).
+For the last test to pass, while `internet === false` the `degradedSince` is **updated to `now`** on every tick (the tolerance counts from when connectivity returns).
 
 `watchdog.test.ts`:
 ```ts
@@ -2268,9 +2268,9 @@ describe('Watchdog.tick', () => {
 });
 ```
 
-- [ ] **Step 2: Rodar** — FAIL.
+- [ ] **Step 2: Run** — FAIL.
 
-- [ ] **Step 3: Implementar**
+- [ ] **Step 3: Implement**
 
 `apps/server/src/watchdog/state-machine.ts`:
 ```ts
@@ -2303,7 +2303,7 @@ export function step(s: WdState, i: WdInput): { next: WdState; actions: WdAction
   return { next: { ...s, restartAttempts: n, nextRestartAt: i.now + backoff(n) }, actions: ['restart'] };
 }
 ```
-(Com `MAX_RESTARTS = 5`: o teste de backoff parte com 1 tentativa já feita e espera mais 4 restarts antes de `failing`, totalizando 5. `nextRestartAt` após a tentativa n é `now + backoff(n)`: 30 s, 1 min, 2 min, 4 min.)
+(With `MAX_RESTARTS = 5`: the backoff test starts with 1 attempt already made and expects 4 more restarts before `failing`, for a total of 5. `nextRestartAt` after attempt n is `now + backoff(n)`: 30 s, 1 min, 2 min, 4 min.)
 
 `apps/server/src/watchdog/probes.ts`:
 ```ts
@@ -2382,12 +2382,12 @@ export class Watchdog {
 }
 ```
 
-- [ ] **Step 4: Rodar** — PASS. (Obs.: `events.list` ordena por `id desc`, então os eventos aparecem do mais novo para o mais antigo, como no teste.)
+- [ ] **Step 4: Run** — PASS. (Note: `events.list` orders by `id desc`, so events appear from newest to oldest, as in the test.)
 - [ ] **Step 5: Commit** — `git add -A && git commit -m "feat(server): add keep-alive watchdog"`
 
 ---
 
-### Task 9: Métricas, versão do cloudflared e teste de origem
+### Task 9: Metrics, cloudflared version and origin test
 
 **Files:**
 - Create: `apps/server/src/metrics/{prometheus.ts,sampler.ts}`, `apps/server/src/system/{cloudflared-info.ts,origin-test.ts}`
@@ -2395,13 +2395,13 @@ export class Watchdog {
 
 **Interfaces:**
 - Produces:
-  - `parsePrometheus(text: string): Map<string, number>` — soma séries com o mesmo nome (ignora labels); chaves usadas: `cloudflared_tunnel_total_requests`, `cloudflared_tunnel_request_errors`, `cloudflared_tunnel_ha_connections`.
-  - `class MetricsSampler { constructor(fetchText: (port: number) => Promise<string | null>, now?: () => number); sample(tunnelId: string, port: number): Promise<void>; snapshot(tunnelId: string): MetricsSnapshot; forget(id): void }` — guarda deltas por minuto (janela de 60 pontos); contadores que diminuem (restart) contam como reset (delta = valor atual).
-  - `latestCloudflaredVersion(fetchImpl?): Promise<string | null>` — `GET https://api.github.com/repos/cloudflare/cloudflared/releases/latest` → `tag_name`; cache em memória de 6 h.
-  - `compareVersions(a, b): number` (formato `YYYY.M.P`).
-  - `testOrigin(service: string, timeoutMs = 3000): Promise<OriginTestResult>` — `http(s)://` faz `fetch` com `redirect: 'manual'` (qualquer resposta HTTP = alcançável; TLS inválido é aceito — para HTTPS usa conexão TCP + handshake via `node:tls` com `rejectUnauthorized: false`); `tcp|ssh|rdp|smb://host:port` faz conexão TCP; `unix:`/`http_status:`/`hello_world` → `{ reachable: true, latencyMs: 0, error: null }`.
+  - `parsePrometheus(text: string): Map<string, number>` — sums series with the same name (ignores labels); keys used: `cloudflared_tunnel_total_requests`, `cloudflared_tunnel_request_errors`, `cloudflared_tunnel_ha_connections`.
+  - `class MetricsSampler { constructor(fetchText: (port: number) => Promise<string | null>, now?: () => number); sample(tunnelId: string, port: number): Promise<void>; snapshot(tunnelId: string): MetricsSnapshot; forget(id): void }` — stores per-minute deltas (60-point window); counters that decrease (restart) count as a reset (delta = current value).
+  - `latestCloudflaredVersion(fetchImpl?): Promise<string | null>` — `GET https://api.github.com/repos/cloudflare/cloudflared/releases/latest` → `tag_name`; 6 h in-memory cache.
+  - `compareVersions(a, b): number` (format `YYYY.M.P`).
+  - `testOrigin(service: string, timeoutMs = 3000): Promise<OriginTestResult>` — `http(s)://` does a `fetch` with `redirect: 'manual'` (any HTTP response = reachable; invalid TLS is accepted — for HTTPS it uses a TCP connection + handshake via `node:tls` with `rejectUnauthorized: false`); `tcp|ssh|rdp|smb://host:port` makes a TCP connection; `unix:`/`http_status:`/`hello_world` → `{ reachable: true, latencyMs: 0, error: null }`.
 
-- [ ] **Step 1: Testes que falham** — `metrics.test.ts`:
+- [ ] **Step 1: Failing tests** — `metrics.test.ts`:
 ```ts
 import { describe, expect, it } from 'vitest';
 import { parsePrometheus } from './prometheus';
@@ -2474,9 +2474,9 @@ describe('testOrigin', () => {
 });
 ```
 
-- [ ] **Step 2: Rodar** — FAIL.
+- [ ] **Step 2: Run** — FAIL.
 
-- [ ] **Step 3: Implementar**
+- [ ] **Step 3: Implement**
 
 `apps/server/src/metrics/prometheus.ts`:
 ```ts
@@ -2574,28 +2574,28 @@ export async function testOrigin(service: string, timeoutMs = 3000): Promise<Ori
   return tcp(url.hostname, port, timeoutMs, url.protocol === 'https:');
 }
 ```
-(Simplificação consciente: HTTP é testado por TCP (e HTTPS por handshake TLS), o que basta para "a origem está escutando".)
+(Deliberate simplification: HTTP is tested via TCP (and HTTPS via a TLS handshake), which is enough to confirm "the origin is listening".)
 
-- [ ] **Step 4: Rodar** — PASS.
+- [ ] **Step 4: Run** — PASS.
 - [ ] **Step 5: Commit** — `git add -A && git commit -m "feat(server): add metrics sampler, version check and origin test"`
 
 ---
 
-### Task 10: Camada HTTP (Fastify)
+### Task 10: HTTP layer (Fastify)
 
 **Files:**
 - Create: `apps/server/src/http/{context.ts,app.ts}`, `apps/server/src/http/routes/{setup.ts,auth.ts,cloudflare.ts,tunnels.ts,system.ts,backup.ts}`
 - Test: `apps/server/src/http/http.test.ts`
 
 **Interfaces:**
-- Consumes: tudo das Tasks 2–9.
+- Consumes: everything from Tasks 2–9.
 - Produces:
 ```ts
 export interface AppContext {
   config: AppConfig; db: Db; admin: AdminRepo; sessions: SessionStore; settings: SettingsRepo;
   tunnels: TunnelRepo; dns: DnsRepo; events: EventRepo; backend: ServiceBackend; sampler: MetricsSampler;
-  cfClient(token: string): CfClient;       // fábrica (baseUrl = config.cfApiBase)
-  api(): CfApi;                             // lança CF_NOT_CONNECTED se não houver credenciais
+  cfClient(token: string): CfClient;       // factory (baseUrl = config.cfApiBase)
+  api(): CfApi;                             // throws CF_NOT_CONNECTED when no credentials are stored
   service: TunnelService;
   latestVersion: () => Promise<string | null>;
 }
@@ -2603,19 +2603,19 @@ export function createContext(config: AppConfig, overrides?: Partial<Pick<AppCon
 export async function buildApp(ctx: AppContext): Promise<FastifyInstance>;
 ```
 
-Endpoints (todos sob `/api`, JSON; exceto os marcados, exigem sessão):
+Endpoints (all under `/api`, JSON; except where marked, all require a session):
 
-| Método | Rota | Público | Body / Query | Resposta |
+| Method | Route | Public | Body / Query | Response |
 |---|---|---|---|---|
 | GET | `/health` | ✓ | — | `{ ok: true }` |
 | GET | `/setup/status` | ✓ | — | `SetupStatus` |
-| POST | `/setup/admin` | ✓ | `adminSetupSchema` | 201 + cookie; `SETUP_ALREADY_DONE` (409) se admin existe |
+| POST | `/setup/admin` | ✓ | `adminSetupSchema` | 201 + cookie; `SETUP_ALREADY_DONE` (409) if an admin already exists |
 | POST | `/auth/login` | ✓ (rate limit 5/min) | `loginSchema` | 204 + cookie; `INVALID_CREDENTIALS` (401) |
-| POST | `/auth/logout` | | — | 204, limpa cookie |
+| POST | `/auth/logout` | | — | 204, clears cookie |
 | GET | `/auth/me` | | — | `{ username }` |
-| POST | `/auth/password` | | `changePasswordSchema` | 204; revoga outras sessões e cria nova |
-| GET | `/cloudflare/status` | | — | `CloudflareStatus` (zonas só se conectado; erro de API → `zones: []`) |
-| POST | `/cloudflare/token` | | `cloudflareTokenSchema` | `CloudflareStatus`; 409 `ACCOUNT_SELECTION_REQUIRED` com `details.accounts` |
+| POST | `/auth/password` | | `changePasswordSchema` | 204; revokes other sessions and creates a new one |
+| GET | `/cloudflare/status` | | — | `CloudflareStatus` (zones only if connected; API error → `zones: []`) |
+| POST | `/cloudflare/token` | | `cloudflareTokenSchema` | `CloudflareStatus`; 409 `ACCOUNT_SELECTION_REQUIRED` with `details.accounts` |
 | GET | `/zones` | | — | `Zone[]` |
 | GET | `/tunnels` | | — | `TunnelSummary[]` |
 | POST | `/tunnels` | | `createTunnelSchema` | 201 `TunnelSummary` |
@@ -2631,21 +2631,21 @@ Endpoints (todos sob `/api`, JSON; exceto os marcados, exigem sessão):
 | GET | `/events` | | `?limit=50` | `TunnelEvent[]` |
 | POST | `/tools/test-origin` | | `testOriginSchema` | `OriginTestResult` |
 | GET | `/system/cloudflared` | | — | `CloudflaredVersionInfo` |
-| POST | `/system/cloudflared/update` | | — | `CloudflaredVersionInfo`; reinicia túneis ativos gerenciados; evento `cloudflared-updated` |
+| POST | `/system/cloudflared/update` | | — | `CloudflaredVersionInfo`; restarts active managed tunnels; `cloudflared-updated` event |
 | GET | `/backup` | | — | `Backup` (JSON, `content-disposition: attachment`) |
-| POST | `/backup` | | `backupSchema` | 204; aplica settings para túneis existentes no repo (ignora ids desconhecidos) e faz upsert do `managed_dns` |
+| POST | `/backup` | | `backupSchema` | 204; applies settings to tunnels that already exist in the repo (ignores unknown ids) and upserts `managed_dns` |
 
-`:id` validado com `uuidSchema` (400 `VALIDATION_ERROR`). Erros: `setErrorHandler` converte `AppError` → `{code,message,details}` com o status dele; `ZodError` → 400 `VALIDATION_ERROR` com `details: issues`; erro de rate limit → 429 `RATE_LIMITED`; demais → 500 `INTERNAL` (loga o erro). Rotas não-`/api` servem `webDist` com fallback SPA para `index.html` quando `webDist` está definido.
+`:id` is validated with `uuidSchema` (400 `VALIDATION_ERROR`). Errors: `setErrorHandler` converts `AppError` → `{code,message,details}` with its status; `ZodError` → 400 `VALIDATION_ERROR` with `details: issues`; rate-limit error → 429 `RATE_LIMITED`; everything else → 500 `INTERNAL` (logs the error). Non-`/api` routes serve `webDist` with an SPA fallback to `index.html` when `webDist` is set.
 
-Cookie `tm_session`: `httpOnly`, `sameSite: 'strict'`, `path: '/'`, `secure: config.cookieSecure`, `maxAge: 7 dias`.
+`tm_session` cookie: `httpOnly`, `sameSite: 'strict'`, `path: '/'`, `secure: config.cookieSecure`, `maxAge: 7 days`.
 
-`/cloudflare/token`: `client = cfClient(token)`; `CfApi.verifyToken(client)` (status ≠ `active` → `CF_TOKEN_INVALID`); `accounts = CfApi.listAccounts(client)`; nenhuma → `CF_PERMISSION_MISSING` com `details: { permission: 'Account: Cloudflare Tunnel: Edit' }`; várias e sem `accountId` → 409 `ACCOUNT_SELECTION_REQUIRED` `details: { accounts }`; valida acesso chamando `listTunnels()` (403 → `CF_PERMISSION_MISSING` `details.permission = 'Account: Cloudflare Tunnel: Edit'`) e `listZones()` (lista vazia ou 403 → `CF_PERMISSION_MISSING` `details.permission = 'Zone: Zone: Read'`); salva com `settings.setCloudflare`.
+`/cloudflare/token`: `client = cfClient(token)`; `CfApi.verifyToken(client)` (status ≠ `active` → `CF_TOKEN_INVALID`); `accounts = CfApi.listAccounts(client)`; none → `CF_PERMISSION_MISSING` with `details: { permission: 'Account: Cloudflare Tunnel: Edit' }`; several and no `accountId` → 409 `ACCOUNT_SELECTION_REQUIRED` `details: { accounts }`; validates access by calling `listTunnels()` (403 → `CF_PERMISSION_MISSING` `details.permission = 'Account: Cloudflare Tunnel: Edit'`) and `listZones()` (empty list or 403 → `CF_PERMISSION_MISSING` `details.permission = 'Zone: Zone: Read'`); saves with `settings.setCloudflare`.
 
-SSE de logs: `reply.hijack()`, cabeçalhos `content-type: text/event-stream`, `cache-control: no-cache`, envia `: ping` a cada 15 s, `unsubscribe` no `close` do request.
+Log SSE: `reply.hijack()`, headers `content-type: text/event-stream`, `cache-control: no-cache`, sends `: ping` every 15 s, `unsubscribe` on request `close`.
 
-Loop de métricas: em `main.ts` (Task 11), não aqui.
+Metrics loop: in `main.ts` (Task 11), not here.
 
-- [ ] **Step 1: Testes que falham** — `apps/server/src/http/http.test.ts`:
+- [ ] **Step 1: Failing tests** — `apps/server/src/http/http.test.ts`:
 ```ts
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync } from 'node:fs';
@@ -2764,9 +2764,9 @@ describe('tunnels API', () => {
 });
 ```
 
-- [ ] **Step 2: Rodar** — FAIL.
+- [ ] **Step 2: Run** — FAIL.
 
-- [ ] **Step 3: Implementar `context.ts`**
+- [ ] **Step 3: Implement `context.ts`**
 ```ts
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
@@ -2817,7 +2817,7 @@ export function createContext(config: AppConfig, overrides: Partial<Pick<AppCont
 }
 ```
 
-- [ ] **Step 4: Implementar `app.ts`**
+- [ ] **Step 4: Implement `app.ts`**
 ```ts
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import cookie from '@fastify/cookie';
@@ -2879,9 +2879,9 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
   return app;
 }
 ```
-(O `errorResponseBuilder` do rate-limit lança um `AppError` que cai no `setErrorHandler`; se a versão do plugin exigir objeto com `statusCode`, retornar `{ statusCode: 429, code: 'RATE_LIMITED', message: '…' }` e o handler trata pelo ramo `statusCode === 429`.)
+(The rate-limit `errorResponseBuilder` throws an `AppError` that falls into `setErrorHandler`; if the plugin version requires an object with `statusCode`, return `{ statusCode: 429, code: 'RATE_LIMITED', message: '…' }` and the handler handles it via the `statusCode === 429` branch.)
 
-- [ ] **Step 5: Implementar rotas**
+- [ ] **Step 5: Implement routes**
 
 `routes/setup.ts`:
 ```ts
@@ -3076,16 +3076,16 @@ export async function backupRoutes(app: FastifyInstance, ctx: AppContext) {
 }
 ```
 
-- [ ] **Step 6: Rodar** — `pnpm --filter @tm/server test` → PASS; `pnpm --filter @tm/server typecheck` → sem erros.
+- [ ] **Step 6: Run** — `pnpm --filter @tm/server test` → PASS; `pnpm --filter @tm/server typecheck` → no errors.
 - [ ] **Step 7: Commit** — `git add -A && git commit -m "feat(server): add HTTP API with session auth"`
 
 ---
 
-### Task 11: Entry point, build e modo dev
+### Task 11: Entry point, build and dev mode
 
 **Files:**
 - Create: `apps/server/src/main.ts`, `apps/server/build.mjs`
-- Test: execução manual (smoke)
+- Test: manual execution (smoke)
 
 - [ ] **Step 1: `main.ts`**
 ```ts
@@ -3130,13 +3130,13 @@ await build({
 - [ ] **Step 3: Smoke test**
 
 Run: `pnpm --filter @tm/server build && NODE_ENV=production SERVICE_BACKEND=fake DATA_DIR=/tmp/tm-smoke ETC_DIR=/tmp/tm-smoke/etc WEB_DIST=/nonexistent PORT=18080 node --disable-warning=ExperimentalWarning apps/server/dist/server.mjs & sleep 2; curl -s localhost:18080/api/health; curl -s localhost:18080/api/setup/status; kill %1`
-Expected: `{"ok":true}` e `{"adminCreated":false,"cloudflareConnected":false}`. (Usar o scratchpad no lugar de `/tmp` durante a execução.)
+Expected: `{"ok":true}` and `{"adminCreated":false,"cloudflareConnected":false}`. (Use the scratchpad instead of `/tmp` during execution.)
 
 - [ ] **Step 4: Commit** — `git add -A && git commit -m "feat(server): add entrypoint, watchdog loop and esbuild bundle"`
 
 ---
 
-### Task 12: Web — scaffold, Kumo, i18n, cliente da API, layout
+### Task 12: Web — scaffold, Kumo, i18n, API client, layout
 
 **Files:**
 - Create: `apps/web/{package.json,tsconfig.json,vite.config.ts,index.html,vitest.config.ts}`, `apps/web/src/{main.tsx,app.tsx,styles.css,test-setup.ts}`
@@ -3146,12 +3146,12 @@ Expected: `{"ok":true}` e `{"adminCreated":false,"cloudflareConnected":false}`. 
 **Interfaces:**
 - Produces:
   - `class ApiError extends Error { code: ErrorCode; status: number; details?: unknown }`
-  - `api.get<T>(path)`, `api.post<T>(path, body?)`, `api.put<T>`, `api.patch<T>`, `api.del(path)` — `fetch('/api' + path, { credentials: 'same-origin' })`; 204 → `undefined`; erro → `ApiError`; 401 dispara `window.dispatchEvent(new Event('tm:unauthorized'))`.
-  - Hooks (TanStack Query): `useSetupStatus`, `useMe`, `useCloudflareStatus`, `useTunnels` (refetch 10 s), `useTunnel(id)` (refetch 10 s), `useTunnelEvents(id)`, `useTunnelMetrics(id)` (refetch 60 s), `useRecentEvents`, `useCloudflaredInfo`, e mutations `useCreateTunnel`, `useUpdateTunnel(id)`, `useTunnelAction(id)` (`'start'|'stop'|'restart'|'adopt'`), `useDeleteTunnel`, `useSaveRoutes(id)`, `useTestOrigin`, `useLogin`, `useLogout`, `useSetupAdmin`, `useConnectCloudflare`, `useChangePassword`, `useUpdateCloudflared`.
-  - `useErrorMessage(): (e: unknown) => string` — traduz `ApiError.code` via `errors.<CODE>` (fallback `errors.INTERNAL`); para `CF_PERMISSION_MISSING` interpola `details.permission`.
+  - `api.get<T>(path)`, `api.post<T>(path, body?)`, `api.put<T>`, `api.patch<T>`, `api.del(path)` — `fetch('/api' + path, { credentials: 'same-origin' })`; 204 → `undefined`; error → `ApiError`; 401 fires `window.dispatchEvent(new Event('tm:unauthorized'))`.
+  - Hooks (TanStack Query): `useSetupStatus`, `useMe`, `useCloudflareStatus`, `useTunnels` (refetch 10 s), `useTunnel(id)` (refetch 10 s), `useTunnelEvents(id)`, `useTunnelMetrics(id)` (refetch 60 s), `useRecentEvents`, `useCloudflaredInfo`, and mutations `useCreateTunnel`, `useUpdateTunnel(id)`, `useTunnelAction(id)` (`'start'|'stop'|'restart'|'adopt'`), `useDeleteTunnel`, `useSaveRoutes(id)`, `useTestOrigin`, `useLogin`, `useLogout`, `useSetupAdmin`, `useConnectCloudflare`, `useChangePassword`, `useUpdateCloudflared`.
+  - `useErrorMessage(): (e: unknown) => string` — translates `ApiError.code` via `errors.<CODE>` (fallback `errors.INTERNAL`); for `CF_PERMISSION_MISSING` interpolates `details.permission`.
   - `<StatusBadge kind="local"|"edge"|"watchdog" value={...} />`
-  - `<AppShell>` — sidebar Kumo (`Sidebar`) com itens Dashboard / Settings, logo `CloudflareLogo`, seletor de idioma e botão logout.
-  - chaves i18n: `nav.*`, `common.*`, `status.local.*`, `status.edge.*`, `status.watchdog.*`, `errors.<ErrorCode>`, `setup.*`, `login.*`, `dashboard.*`, `tunnel.*`, `routes.*`, `settings.*`, `events.<EventType>`.
+  - `<AppShell>` — Kumo sidebar (`Sidebar`) with Dashboard / Settings items, `CloudflareLogo` logo, language selector and logout button.
+  - i18n keys: `nav.*`, `common.*`, `status.local.*`, `status.edge.*`, `status.watchdog.*`, `errors.<ErrorCode>`, `setup.*`, `login.*`, `dashboard.*`, `tunnel.*`, `routes.*`, `settings.*`, `events.<EventType>`.
 
 - [ ] **Step 1: `apps/web/package.json`**
 ```json
@@ -3190,7 +3190,7 @@ Expected: `{"ok":true}` e `{"adminCreated":false,"cloudflareConnected":false}`. 
   }
 }
 ```
-(Versões exatas: usar as que o `pnpm add` resolver; confirmar compatibilidade de peers do Kumo — React 19, zod 4, echarts 6, phosphor 2.1.)
+(Exact versions: use whatever `pnpm add` resolves; confirm Kumo peer compatibility — React 19, zod 4, echarts 6, phosphor 2.1.)
 
 `vite.config.ts`:
 ```ts
@@ -3239,16 +3239,16 @@ body { @apply bg-kumo-canvas text-kumo-default; }
 </html>
 ```
 
-- [ ] **Step 2: Consultar a documentação do Kumo antes de escrever componentes**
+- [ ] **Step 2: Consult the Kumo documentation before writing components**
 
 Run: `cd apps/web && npx @cloudflare/kumo doc Sidebar && npx @cloudflare/kumo doc Table && npx @cloudflare/kumo doc Dialog && npx @cloudflare/kumo doc Tabs && npx @cloudflare/kumo doc Toast && npx @cloudflare/kumo doc Chart && npx @cloudflare/kumo doc Select && npx @cloudflare/kumo doc Field`
-Anotar as APIs reais (nomes de subcomponentes e props). Onde o plano abaixo divergir da doc, **a doc vence**.
+Note the actual APIs (subcomponent names and props). Where the plan below diverges from the docs, **the docs win**.
 
-- [ ] **Step 3: Abrir o painel da Cloudflare no Chrome do usuário (já logado) para referência de layout**
+- [ ] **Step 3: Open the Cloudflare dashboard in the user's Chrome (already logged in) for layout reference**
 
-Usar a skill `claude-in-chrome`: abrir `https://one.dash.cloudflare.com/` → Networks → Tunnels; tirar screenshots da lista de túneis, do detalhe (aba Public Hostnames) e do formulário de hostname. Registrar padrões: header de página (título + descrição + ação primária à direita), tabelas em `LayerCard`, badges de status, estados vazios. **Não** clicar em nada que altere a conta.
+Use the `claude-in-chrome` skill: open `https://one.dash.cloudflare.com/` → Networks → Tunnels; take screenshots of the tunnel list, the detail view (Public Hostnames tab) and the hostname form. Record patterns: page header (title + description + primary action on the right), tables inside `LayerCard`, status badges, empty states. **Do not** click anything that changes the account.
 
-- [ ] **Step 4: Testes que falham**
+- [ ] **Step 4: Failing tests**
 
 `src/i18n/i18n.test.ts`:
 ```ts
@@ -3298,9 +3298,9 @@ describe('api client', () => {
 });
 ```
 
-- [ ] **Step 5: Rodar** — `pnpm install && pnpm --filter @tm/web test` → FAIL.
+- [ ] **Step 5: Run** — `pnpm install && pnpm --filter @tm/web test` → FAIL.
 
-- [ ] **Step 6: Implementar `api/client.ts`**
+- [ ] **Step 6: Implement `api/client.ts`**
 ```ts
 import type { ApiErrorBody, ErrorCode } from '@tm/shared';
 
@@ -3333,7 +3333,7 @@ export const api = {
 };
 ```
 
-- [ ] **Step 7: Implementar `api/hooks.ts`**
+- [ ] **Step 7: Implement `api/hooks.ts`**
 ```ts
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
@@ -3410,9 +3410,9 @@ void i18n.use(LanguageDetector).use(initReactI18next).init({
 });
 export default i18n;
 ```
-(`nonExplicitSupportedLngs` faz `pt` e `pt-PT` caírem em `pt-BR`; se não resolver, mapear no `convertDetectedLanguage: (l) => l.startsWith('pt') ? 'pt-BR' : l`.)
+(`nonExplicitSupportedLngs` makes `pt` and `pt-PT` fall back to `pt-BR`; if that doesn't resolve it, map it in `convertDetectedLanguage: (l) => l.startsWith('pt') ? 'pt-BR' : l`.)
 
-`src/i18n/en.json` (conteúdo completo; o `pt-BR.json` tem **as mesmas chaves**, traduzidas):
+`src/i18n/en.json` (full content; `pt-BR.json` has **the same keys**, translated):
 ```json
 {
   "app": { "name": "Cloudflared Manager" },
@@ -3510,9 +3510,9 @@ export default i18n;
   }
 }
 ```
-Escrever `pt-BR.json` com as mesmas chaves (ex.: `nav.dashboard` = "Painel", `nav.settings` = "Configurações", `dashboard.title` = "Túneis", `tunnel.tabs.routes` = "Hostnames públicos", `errors.DNS_CONFLICT` = "Já existe um registro DNS para este hostname.", etc.). O teste do Step 4 garante paridade de chaves.
+Write `pt-BR.json` with the same keys (e.g. `nav.dashboard` = "Painel", `nav.settings` = "Configurações", `dashboard.title` = "Túneis", `tunnel.tabs.routes` = "Hostnames públicos", `errors.DNS_CONFLICT` = "Já existe um registro DNS para este hostname.", etc.). The Step 4 test ensures key parity.
 
-- [ ] **Step 9: `lib/format.ts`, componentes base, `app.tsx`, `main.tsx`**
+- [ ] **Step 9: `lib/format.ts`, base components, `app.tsx`, `main.tsx`**
 
 `lib/format.ts`:
 ```ts
@@ -3541,7 +3541,7 @@ export function StatusBadge(p: Props) {
   return <Badge variant={TONE[p.value] ?? 'secondary'}>{t(`status.${p.kind}.${p.value}`)}</Badge>;
 }
 ```
-(Se o Kumo oferecer variantes de sucesso/aviso no `Badge` na versão instalada — conferir no Step 2 —, usar `success` para `active/healthy` e `warning` para `degraded/restarting`.)
+(If Kumo offers success/warning variants on `Badge` in the installed version — check in Step 2 —, use `success` for `active/healthy` and `warning` for `degraded/restarting`.)
 
 `components/error-banner.tsx`:
 ```tsx
@@ -3574,7 +3574,7 @@ export function PageHeader({ title, description, actions, breadcrumb }: { title:
 }
 ```
 
-`components/app-shell.tsx` — sidebar com o componente `Sidebar` do Kumo (API conforme a doc do Step 2); itens `nav.dashboard` (`/`, ícone `CloudIcon`) e `nav.settings` (`/settings`, ícone `GearIcon`); no rodapé, `Select` de idioma (`en` → "English", `pt-BR` → "Português (Brasil)") chamando `i18n.changeLanguage` e botão ghost `nav.logout` (`SignOutIcon`) que chama `useLogout` e navega para `/login`. O conteúdo fica em `<main className="mx-auto w-full max-w-6xl p-6">`. Estrutura:
+`components/app-shell.tsx` — sidebar using Kumo's `Sidebar` component (API per the Step 2 docs); items `nav.dashboard` (`/`, `CloudIcon` icon) and `nav.settings` (`/settings`, `GearIcon` icon); in the footer, a language `Select` (`en` → "English", `pt-BR` → "Português (Brasil)") calling `i18n.changeLanguage` and a ghost `nav.logout` button (`SignOutIcon`) that calls `useLogout` and navigates to `/login`. The content sits in `<main className="mx-auto w-full max-w-6xl p-6">`. Structure:
 ```tsx
 import { Button, CloudflareLogo, Select, Sidebar } from '@cloudflare/kumo';
 import { CloudIcon, GearIcon, SignOutIcon } from '@phosphor-icons/react';
@@ -3593,12 +3593,12 @@ export function AppShell() {
         {/* itens */}
       </Sidebar>
       <main className="mx-auto w-full max-w-6xl p-6"><Outlet /></main>
-      {/* rodapé do Sidebar: <Select value={i18n.resolvedLanguage} onValueChange={(v) => i18n.changeLanguage(v as string)}> ... ; <Button variant="ghost" icon={SignOutIcon} onClick={async () => { await logout.mutateAsync(); nav('/login'); }}>{t('nav.logout')}</Button> */}
+      {/* Sidebar footer: <Select value={i18n.resolvedLanguage} onValueChange={(v) => i18n.changeLanguage(v as string)}> ... ; <Button variant="ghost" icon={SignOutIcon} onClick={async () => { await logout.mutateAsync(); nav('/login'); }}>{t('nav.logout')}</Button> */}
     </div>
   );
 }
 ```
-O implementador substitui os comentários pela API real do `Sidebar` lida no Step 2 — o comportamento exigido está descrito acima.
+The implementer replaces the comments with the actual `Sidebar` API read in Step 2 — the required behavior is described above.
 
 `app.tsx`:
 ```tsx
@@ -3663,7 +3663,7 @@ applyTheme(getStoredTheme());
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
 ```
 
-`lib/theme.ts` (Kumo usa `data-mode="dark"` no elemento raiz; confirmar no Step 2):
+`lib/theme.ts` (Kumo uses `data-mode="dark"` on the root element; confirm in Step 2):
 ```ts
 export type Theme = 'light' | 'dark' | 'system';
 export const getStoredTheme = (): Theme => (localStorage.getItem('tm.theme') as Theme | null) ?? 'system';
@@ -3675,14 +3675,14 @@ export function applyTheme(theme: Theme) {
 }
 ```
 
-As páginas (`pages/*.tsx`) são criadas como stubs de uma linha (`export function DashboardPage() { return null; }`) nesta task e preenchidas nas Tasks 13–16.
+The pages (`pages/*.tsx`) are created as one-line stubs (`export function DashboardPage() { return null; }`) in this task and filled in during Tasks 13–16.
 
-- [ ] **Step 10: Rodar** — `pnpm --filter @tm/web test` → PASS; `pnpm --filter @tm/web build` → sem erros.
+- [ ] **Step 10: Run** — `pnpm --filter @tm/web test` → PASS; `pnpm --filter @tm/web build` → no errors.
 - [ ] **Step 11: Commit** — `git add -A && git commit -m "feat(web): scaffold SPA with Kumo, i18n and API client"`
 
 ---
 
-### Task 13: Web — Setup wizard e Login
+### Task 13: Web — Setup wizard and Login
 
 **Files:**
 - Create: `apps/web/src/pages/{setup.tsx,login.tsx}`, `apps/web/src/lib/token-link.ts`
@@ -3691,15 +3691,15 @@ As páginas (`pages/*.tsx`) são criadas como stubs de uma linha (`export functi
 **Interfaces:**
 - Produces: `buildTokenTemplateUrl(name?: string): string`.
 
-Comportamento do `SetupPage`:
-- Layout centralizado (`Surface` / `LayerCard`, largura máx. 520 px) com `CloudflareLogo`, título `setup.title`, indicador de passos (1 `setup.step1`, 2 `setup.step2`).
-- Passo 1 (quando `!adminCreated`): `Input` usuário, `SensitiveInput` senha + confirmação; validação local (12+ chars, iguais) exibida via `Field error`; submit → `useSetupAdmin`.
-- Passo 2 (quando `adminCreated && !cloudflareConnected`; se não logado, redireciona para `/login`): texto `setup.tokenIntro`; lista de permissões (`permTunnel`, `permDns`, `permZone`, `allZones`); `Button` primário com ícone `ArrowSquareOutIcon` que abre `buildTokenTemplateUrl()` em nova aba; `SensitiveInput` para o token; `Connect` → `useConnectCloudflare`. Em `ACCOUNT_SELECTION_REQUIRED`, mostra `Select` com `details.accounts` e reenvia com `accountId`. Erros via `ErrorBanner`. Em sucesso, mostra `setup.connected` + `setup.zonesFound` e botão `setup.finish` → `/`.
-- Se tudo estiver configurado, redireciona para `/`.
+`SetupPage` behavior:
+- Centered layout (`Surface` / `LayerCard`, max width 520 px) with `CloudflareLogo`, `setup.title` title, step indicator (1 `setup.step1`, 2 `setup.step2`).
+- Step 1 (when `!adminCreated`): username `Input`, password `SensitiveInput` + confirmation; local validation (12+ chars, matching) shown via `Field error`; submit → `useSetupAdmin`.
+- Step 2 (when `adminCreated && !cloudflareConnected`; if not logged in, redirects to `/login`): `setup.tokenIntro` text; permission list (`permTunnel`, `permDns`, `permZone`, `allZones`); primary `Button` with `ArrowSquareOutIcon` icon that opens `buildTokenTemplateUrl()` in a new tab; `SensitiveInput` for the token; `Connect` → `useConnectCloudflare`. On `ACCOUNT_SELECTION_REQUIRED`, shows a `Select` with `details.accounts` and resubmits with `accountId`. Errors via `ErrorBanner`. On success, shows `setup.connected` + `setup.zonesFound` and a `setup.finish` button → `/`.
+- If everything is already configured, redirects to `/`.
 
-`LoginPage`: mesmo layout; `Input` usuário + `SensitiveInput` senha; `useLogin`; erro via `ErrorBanner`; sucesso → `/`. Se `!adminCreated` → `/setup`.
+`LoginPage`: same layout; username `Input` + password `SensitiveInput`; `useLogin`; error via `ErrorBanner`; success → `/`. If `!adminCreated` → `/setup`.
 
-- [ ] **Step 1: Testes que falham**
+- [ ] **Step 1: Failing tests**
 
 `src/lib/token-link.test.ts`:
 ```ts
@@ -3774,11 +3774,11 @@ describe('SetupPage', () => {
   });
 });
 ```
-(Se o `SensitiveInput`/`Select` do Kumo não associar `label` de forma acessível, passar `aria-label` explicitamente; os testes usam rótulos acessíveis.)
+(If Kumo's `SensitiveInput`/`Select` doesn't associate `label` accessibly, pass `aria-label` explicitly; the tests use accessible labels.)
 
-- [ ] **Step 2: Rodar** — FAIL.
+- [ ] **Step 2: Run** — FAIL.
 
-- [ ] **Step 3: Implementar `token-link.ts`**
+- [ ] **Step 3: Implement `token-link.ts`**
 ```ts
 export function buildTokenTemplateUrl(name = 'cloudflared-manager') {
   const perms = [{ key: 'argotunnel', type: 'edit' }, { key: 'dns', type: 'edit' }, { key: 'zone', type: 'read' }];
@@ -3787,42 +3787,42 @@ export function buildTokenTemplateUrl(name = 'cloudflared-manager') {
 }
 ```
 
-- [ ] **Step 4: Implementar `setup.tsx` e `login.tsx`** conforme o comportamento descrito, usando `Input`, `SensitiveInput`, `Field`, `Button`, `Select`, `Banner`, `LayerCard`, `Text`, `CloudflareLogo` do Kumo.
+- [ ] **Step 4: Implement `setup.tsx` and `login.tsx`** following the behavior described above, using Kumo's `Input`, `SensitiveInput`, `Field`, `Button`, `Select`, `Banner`, `LayerCard`, `Text`, `CloudflareLogo`.
 
-- [ ] **Step 5: Verificar o link pré-preenchido no Chrome do usuário**
+- [ ] **Step 5: Verify the pre-filled link in the user's Chrome**
 
-Com a skill `claude-in-chrome`, abrir a URL gerada por `buildTokenTemplateUrl()` (o usuário está logado). Conferir se as três permissões aparecem pré-selecionadas. **Não** clicar em "Continue to summary"/"Create Token". Se a permissão de túnel não aparecer, testar as chaves `cloudflare_tunnel` e `cfd_tunnel` e ajustar o teste + implementação para a que funcionar. Se nenhuma funcionar, manter as duas que funcionam e deixar a lista textual de permissões visível (já está no layout).
+Using the `claude-in-chrome` skill, open the URL generated by `buildTokenTemplateUrl()` (the user is logged in). Check that all three permissions appear pre-selected. **Do not** click "Continue to summary"/"Create Token". If the tunnel permission doesn't show up, try the `cloudflare_tunnel` and `cfd_tunnel` keys and adjust the test + implementation to whichever works. If neither works, keep the two that do and leave the textual permission list visible (it's already in the layout).
 
-- [ ] **Step 6: Rodar** — PASS.
+- [ ] **Step 6: Run** — PASS.
 - [ ] **Step 7: Commit** — `git add -A && git commit -m "feat(web): add setup wizard and login"`
 
 ---
 
-### Task 14: Web — Dashboard e criação de túnel
+### Task 14: Web — Dashboard and tunnel creation
 
 **Files:**
 - Create: `apps/web/src/pages/dashboard.tsx`, `apps/web/src/components/{create-tunnel-dialog.tsx,tunnel-table.tsx,summary-cards.tsx,event-list.tsx}`
 - Test: `apps/web/src/components/tunnel-table.test.tsx`
 
 **Interfaces:**
-- Produces: `<EventList events={TunnelEvent[]} compact? />` (reutilizado na Task 16), `summarize(tunnels: TunnelSummary[]): { healthy: number; degraded: number; stopped: number; failing: number; routes: number }`.
+- Produces: `<EventList events={TunnelEvent[]} compact? />` (reused in Task 16), `summarize(tunnels: TunnelSummary[]): { healthy: number; degraded: number; stopped: number; failing: number; routes: number }`.
 
-Regras de `summarize` (apenas túneis `managedHere`):
-- `failing` se `watchdog === 'failing'` ou `local === 'failed'`;
-- senão `stopped` se `local === 'inactive'`;
-- senão `healthy` se `edgeStatus === 'healthy'` e `local === 'active'`;
-- senão `degraded`.
-- `routes` = soma de `routeCount`.
+`summarize` rules (only `managedHere` tunnels):
+- `failing` if `watchdog === 'failing'` or `local === 'failed'`;
+- otherwise `stopped` if `local === 'inactive'`;
+- otherwise `healthy` if `edgeStatus === 'healthy'` and `local === 'active'`;
+- otherwise `degraded`.
+- `routes` = sum of `routeCount`.
 
-Layout do Dashboard:
-- `PageHeader` com `dashboard.title`, `dashboard.subtitle` e botão primário `dashboard.create` (`PlusIcon`) que abre `CreateTunnelDialog`.
-- `Grid variant="4up"` com 4 cards (`LayerCard`) de resumo (healthy, degraded, stopped, failing), cada um com número grande e ponto colorido (`bg-kumo-success`, `bg-kumo-warning`, `bg-kumo-inactive`/`text-kumo-subtle`, `bg-kumo-danger`).
-- `LayerCard` com `TunnelTable`: colunas Nome (link para `/tunnels/:id`), Status (`StatusBadge edge` + `StatusBadge local`), Conexões (colos em `Text variant="mono"`, ex.: `GRU · EZE`), Rotas, Uptime (`formatDuration(activeSince)`), Keep-alive (`StatusBadge watchdog`). Túneis `!managedHere` aparecem por último, esmaecidos, com botão `dashboard.adopt` (somente se `remote`) → `useTunnelAction(id).mutate('adopt')`.
-- Estado vazio: componente `Empty` do Kumo com `dashboard.emptyTitle`/`emptyDescription` e botão de criar.
-- `LayerCard` "Recent events" com `EventList` (`useRecentEvents`).
-- `CreateTunnelDialog`: `Dialog` com `Input` nome (validação com `createTunnelSchema`), `useCreateTunnel`; em sucesso fecha, toast e navega para `/tunnels/:id?tab=routes`.
+Dashboard layout:
+- `PageHeader` with `dashboard.title`, `dashboard.subtitle` and a primary `dashboard.create` button (`PlusIcon`) that opens `CreateTunnelDialog`.
+- `Grid variant="4up"` with 4 summary cards (`LayerCard`) (healthy, degraded, stopped, failing), each with a large number and a colored dot (`bg-kumo-success`, `bg-kumo-warning`, `bg-kumo-inactive`/`text-kumo-subtle`, `bg-kumo-danger`).
+- `LayerCard` with `TunnelTable`: columns Name (link to `/tunnels/:id`), Status (`StatusBadge edge` + `StatusBadge local`), Connections (colos in `Text variant="mono"`, e.g. `GRU · EZE`), Routes, Uptime (`formatDuration(activeSince)`), Keep-alive (`StatusBadge watchdog`). `!managedHere` tunnels appear last, dimmed, with a `dashboard.adopt` button (only if `remote`) → `useTunnelAction(id).mutate('adopt')`.
+- Empty state: Kumo's `Empty` component with `dashboard.emptyTitle`/`emptyDescription` and a create button.
+- `LayerCard` "Recent events" with `EventList` (`useRecentEvents`).
+- `CreateTunnelDialog`: `Dialog` with a name `Input` (validated with `createTunnelSchema`), `useCreateTunnel`; on success it closes, shows a toast and navigates to `/tunnels/:id?tab=routes`.
 
-- [ ] **Step 1: Teste que falha** — `tunnel-table.test.tsx`:
+- [ ] **Step 1: Failing test** — `tunnel-table.test.tsx`:
 ```tsx
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -3859,9 +3859,9 @@ describe('TunnelTable', () => {
 });
 ```
 
-- [ ] **Step 2: Rodar** — FAIL. **Step 3:** implementar. **Step 4:** Rodar — PASS.
+- [ ] **Step 2: Run** — FAIL. **Step 3:** implement. **Step 4:** Run — PASS.
 
-Implementação de `summarize` (em `summary-cards.tsx`):
+`summarize` implementation (in `summary-cards.tsx`):
 ```ts
 import type { TunnelSummary } from '@tm/shared';
 export function summarize(tunnels: TunnelSummary[]) {
@@ -3877,13 +3877,13 @@ export function summarize(tunnels: TunnelSummary[]) {
   return out;
 }
 ```
-Colos: `connections.map((c) => c.coloName.replace(/\d+$/, '').toUpperCase())` sem duplicatas, unidos por ` · `.
+Colos: `connections.map((c) => c.coloName.replace(/\d+$/, '').toUpperCase())` without duplicates, joined by ` · `.
 
 - [ ] **Step 5: Commit** — `git add -A && git commit -m "feat(web): add dashboard and create tunnel dialog"`
 
 ---
 
-### Task 15: Web — Detalhe do túnel, aba de rotas
+### Task 15: Web — Tunnel detail, routes tab
 
 **Files:**
 - Create: `apps/web/src/pages/tunnel.tsx`, `apps/web/src/components/routes/{routes-tab.tsx,route-form-dialog.tsx,route-model.ts}`
@@ -3897,23 +3897,23 @@ export type ServiceType = 'http' | 'https' | 'tcp' | 'ssh' | 'rdp' | 'unix' | 'h
 export interface RouteFormValues { subdomain: string; zone: string; path: string; type: ServiceType; target: string;
   noTLSVerify: boolean; httpHostHeader: string; originServerName: string; connectTimeout: string; keepAliveTimeout: string }
 export function routeToForm(r: Route, zones: Zone[]): RouteFormValues;
-export function formToRoute(v: RouteFormValues): Route;          // valida com routeSchema; lança ZodError
+export function formToRoute(v: RouteFormValues): Route;          // validates with routeSchema; throws ZodError
 export function moveRoute(routes: Route[], index: number, dir: -1 | 1): Route[];
 ```
-- `TunnelPage`: `PageHeader` com breadcrumb (`Breadcrumbs`: Tunnels › nome), nome, `StatusBadge`s e ações (`Start`/`Stop` conforme `local`, `Restart`); `Banner` de erro para `watchdog === 'failing'` (`tunnel.failingBanner`), ghost (`tunnel.ghost`) e `!managedHere` (`tunnel.notHereBanner` + botão adopt). `Tabs` (variante underline) com `routes | status | logs | events | settings`, aba sincronizada com `?tab=`.
+- `TunnelPage`: `PageHeader` with a breadcrumb (`Breadcrumbs`: Tunnels › name), name, `StatusBadge`s and actions (`Start`/`Stop` depending on `local`, `Restart`); error `Banner` for `watchdog === 'failing'` (`tunnel.failingBanner`), ghost (`tunnel.ghost`) and `!managedHere` (`tunnel.notHereBanner` + adopt button). `Tabs` (underline variant) with `routes | status | logs | events | settings`, tab synced with `?tab=`.
 
-Regras da aba Rotas:
-- `LayerCard` com `Table`: Hostname (`hostname` + `path` em mono), Serviço (mono), ações (subir/descer, editar, remover via `DropdownMenu`). Última linha fixa, esmaecida: `*` → `http_status:404` com `routes.catchAll`.
-- Adicionar/editar abre `RouteFormDialog`: `Input` subdomínio + `Select` domínio (zonas de `useCloudflareStatus().data.zones`) lado a lado (preview `sub.dominio` embaixo), `Input` path (opcional), `Select` tipo + `Input` URL (placeholder `192.168.1.10:8123`), `Collapsible` "Advanced options" com `Switch noTLSVerify` e inputs; botão `routes.testOrigin` → `useTestOrigin` mostrando `routes.reachable`/`routes.unreachable`.
-- Salvar monta a lista nova e chama `useSaveRoutes(id).mutateAsync({ version: detail.configVersion, routes })`:
-  - `DNS_CONFLICT` → `Dialog` de confirmação (`routes.conflictTitle`/`conflictDescription` com `details.hostnames`) → reenvia com `overwriteDns: hostnames`.
-  - `CONFIG_VERSION_CONFLICT` → `Banner` com botão `routes.reload` (refetch).
-  - sucesso → toast `routes.saved`.
-- Remover abre `Dialog` com `Checkbox` `routes.removeDns` marcado por padrão; desmarcado → `keepDns: [hostname]`. Se outra regra usa o mesmo host, o checkbox não aparece.
-- Reordenar salva imediatamente.
-- Túnel `!managedHere` ou `!remote`: tabela somente leitura.
+Routes tab rules:
+- `LayerCard` with `Table`: Hostname (`hostname` + `path` in mono), Service (mono), actions (move up/down, edit, remove via `DropdownMenu`). Fixed last row, dimmed: `*` → `http_status:404` with `routes.catchAll`.
+- Add/edit opens `RouteFormDialog`: subdomain `Input` + domain `Select` (zones from `useCloudflareStatus().data.zones`) side by side (with a `sub.domain` preview below), path `Input` (optional), type `Select` + URL `Input` (placeholder `192.168.1.10:8123`), `Collapsible` "Advanced options" with `Switch noTLSVerify` and inputs; `routes.testOrigin` button → `useTestOrigin` showing `routes.reachable`/`routes.unreachable`.
+- Saving builds the new list and calls `useSaveRoutes(id).mutateAsync({ version: detail.configVersion, routes })`:
+  - `DNS_CONFLICT` → confirmation `Dialog` (`routes.conflictTitle`/`conflictDescription` with `details.hostnames`) → resubmits with `overwriteDns: hostnames`.
+  - `CONFIG_VERSION_CONFLICT` → `Banner` with a `routes.reload` button (refetch).
+  - success → `routes.saved` toast.
+- Remove opens a `Dialog` with a `routes.removeDns` `Checkbox` checked by default; unchecked → `keepDns: [hostname]`. If another rule uses the same host, the checkbox doesn't appear.
+- Reordering saves immediately.
+- `!managedHere` or `!remote` tunnel: read-only table.
 
-- [ ] **Step 1: Testes que falham** — `route-model.test.ts`:
+- [ ] **Step 1: Failing tests** — `route-model.test.ts`:
 ```ts
 import { describe, expect, it } from 'vitest';
 import { formToRoute, moveRoute, routeToForm } from './route-model';
@@ -3946,11 +3946,11 @@ describe('route model', () => {
 });
 ```
 
-`routes-tab.test.tsx` — com `fetch` mockado: renderiza `RoutesTab` com um `TunnelDetail` de 1 rota; clicar em "Add public hostname", preencher `sub=git`, escolher domínio, URL `10.0.0.9:3000`, salvar; o mock de `PUT /api/tunnels/:id/routes` responde 409 `DNS_CONFLICT` com `details.hostnames: ['git.example.com']` na primeira vez e 200 na segunda. Asserções: aparece o diálogo "DNS record already exists"; após "Replace DNS record", o segundo PUT tem `overwriteDns: ['git.example.com']` e a lista de rotas enviada tem 2 itens com a nova por último.
+`routes-tab.test.tsx` — with a mocked `fetch`: renders `RoutesTab` with a `TunnelDetail` with 1 route; click "Add public hostname", fill in `sub=git`, choose a domain, URL `10.0.0.9:3000`, save; the `PUT /api/tunnels/:id/routes` mock responds 409 `DNS_CONFLICT` with `details.hostnames: ['git.example.com']` the first time and 200 the second time. Assertions: the "DNS record already exists" dialog appears; after "Replace DNS record", the second PUT has `overwriteDns: ['git.example.com']` and the submitted route list has 2 items with the new one last.
 
-- [ ] **Step 2: Rodar** — FAIL.
+- [ ] **Step 2: Run** — FAIL.
 
-- [ ] **Step 3: Implementar `route-model.ts`**
+- [ ] **Step 3: Implement `route-model.ts`**
 ```ts
 import { routeSchema, type Route, type Zone } from '@tm/shared';
 
@@ -3990,31 +3990,31 @@ export function moveRoute(routes: Route[], index: number, dir: -1 | 1): Route[] 
 }
 ```
 
-- [ ] **Step 4: Implementar `tunnel.tsx`, `routes-tab.tsx`, `route-form-dialog.tsx`** conforme as regras. As outras abas renderizam `null` até a Task 16.
-- [ ] **Step 5: Rodar** — PASS.
+- [ ] **Step 4: Implement `tunnel.tsx`, `routes-tab.tsx`, `route-form-dialog.tsx`** following the rules above. The other tabs render `null` until Task 16.
+- [ ] **Step 5: Run** — PASS.
 - [ ] **Step 6: Commit** — `git add -A && git commit -m "feat(web): add tunnel page and public hostnames editor"`
 
 ---
 
-### Task 16: Web — abas Status, Logs, Eventos, Configurações
+### Task 16: Web — Status, Logs, Events, Settings tabs
 
 **Files:**
 - Create: `apps/web/src/components/tunnel/{status-tab.tsx,logs-tab.tsx,events-tab.tsx,settings-tab.tsx,log-stream.ts}`
 - Test: `apps/web/src/components/tunnel/log-stream.test.ts`, `apps/web/src/components/tunnel/settings-tab.test.tsx`
 
 **Interfaces:**
-- Produces: `useLogStream(id: string, opts: { paused: boolean }): { lines: LogLine[]; connected: boolean }` — carrega `GET /tunnels/:id/logs?lines=200` e abre `EventSource('/api/tunnels/:id/logs/stream')`; acumula no máximo 1000 linhas; enquanto `paused`, bufferiza e aplica ao retomar; fecha o `EventSource` no unmount. Tipo `LogLine` local igual ao do server (`{ time, level, message }`).
-- Função pura `appendCapped(lines: LogLine[], incoming: LogLine[], cap = 1000): LogLine[]`.
+- Produces: `useLogStream(id: string, opts: { paused: boolean }): { lines: LogLine[]; connected: boolean }` — loads `GET /tunnels/:id/logs?lines=200` and opens `EventSource('/api/tunnels/:id/logs/stream')`; accumulates at most 1000 lines; while `paused`, buffers and applies on resume; closes the `EventSource` on unmount. Local `LogLine` type identical to the server's (`{ time, level, message }`).
+- Pure function `appendCapped(lines: LogLine[], incoming: LogLine[], cap = 1000): LogLine[]`.
 
-Status: `LayerCard` "Edge connections" (tabela colo/aberta em/IP de origem/versão do cliente; vazio → `tunnel.noConnections`); `LayerCard` com gráfico do Kumo (`Chart`, ECharts) de linhas `requests`/`errors` por minuto a partir de `useTunnelMetrics` (vazio → `tunnel.metricsEmpty`); linha com `tunnel.version` (primeiro `clientVersion`).
+Status: `LayerCard` "Edge connections" (table with colo/opened at/origin IP/client version; empty → `tunnel.noConnections`); `LayerCard` with a Kumo chart (`Chart`, ECharts) of `requests`/`errors` lines per minute from `useTunnelMetrics` (empty → `tunnel.metricsEmpty`); a line with `tunnel.version` (first `clientVersion`).
 
-Logs: toolbar com `Select` de nível (all/info/warn/error), `Button` pausar/retomar, `Button` limpar visualização; área `font-mono text-xs` com fundo `bg-kumo-recessed`, auto-scroll para o fim quando não pausado, linhas `warn` em `text-kumo-warning` e `error/fatal` em `text-kumo-danger`.
+Logs: toolbar with a level `Select` (all/info/warn/error), pause/resume `Button`, clear view `Button`; `font-mono text-xs` area with `bg-kumo-recessed` background, auto-scroll to the bottom when not paused, `warn` lines in `text-kumo-warning` and `error/fatal` in `text-kumo-danger`.
 
-Eventos: `EventList` (da Task 14) com todos os eventos do túnel e horário relativo.
+Events: `EventList` (from Task 14) with all of the tunnel's events and a relative timestamp.
 
-Configurações: formulário com `Input` nome, `Switch` keep-alive, `Input type=number` tolerância (1–60), `Select` log level, `Select` protocolo; `Save` envia **só os campos alterados** via `useUpdateTunnel`. "Zona de perigo" (`LayerCard` com borda `ring-kumo-danger`): `Button variant="destructive"` "Delete" abre `Dialog` que exige digitar o nome exato (`tunnel.deleteConfirm`) → `useDeleteTunnel` → navega para `/`.
+Settings: form with a name `Input`, keep-alive `Switch`, tolerance `Input type=number` (1–60), log level `Select`, protocol `Select`; `Save` sends **only the changed fields** via `useUpdateTunnel`. "Danger zone" (`LayerCard` with a `ring-kumo-danger` border): `Button variant="destructive"` "Delete" opens a `Dialog` that requires typing the exact name (`tunnel.deleteConfirm`) → `useDeleteTunnel` → navigates to `/`.
 
-- [ ] **Step 1: Testes que falham**
+- [ ] **Step 1: Failing tests**
 
 `log-stream.test.ts`:
 ```ts
@@ -4029,9 +4029,9 @@ describe('appendCapped', () => {
 });
 ```
 
-`settings-tab.test.tsx`: renderiza `SettingsTab` com um `TunnelDetail`; altera só a tolerância para 5 e salva; asserta que o PATCH recebeu exatamente `{ toleranceMinutes: 5 }`. Segundo caso: no diálogo de exclusão, o botão confirmar fica desabilitado até digitar `home`.
+`settings-tab.test.tsx`: renders `SettingsTab` with a `TunnelDetail`; changes only the tolerance to 5 and saves; asserts that the PATCH received exactly `{ toleranceMinutes: 5 }`. Second case: in the delete dialog, the confirm button stays disabled until `home` is typed.
 
-- [ ] **Step 2: Rodar** — FAIL. **Step 3:** implementar. **Step 4:** Rodar — PASS.
+- [ ] **Step 2: Run** — FAIL. **Step 3:** implement. **Step 4:** Run — PASS.
 
 `log-stream.ts`:
 ```ts
@@ -4072,30 +4072,30 @@ export function useLogStream(id: string, { paused }: { paused: boolean }) {
 
 ---
 
-### Task 17: Web — página de Configurações gerais
+### Task 17: Web — general Settings page
 
 **Files:**
 - Create: `apps/web/src/pages/settings.tsx`
 - Test: `apps/web/src/pages/settings.test.tsx`
 
-Seções (`LayerCard` cada):
-1. **Conta Cloudflare**: nome da conta, `settings.tokenEnding`, lista de domínios (`Badge` por zona), botão `settings.replaceToken` que abre `Dialog` com o mesmo fluxo do passo 2 do setup (reusar um componente `ConnectCloudflareForm` extraído de `setup.tsx` nesta task).
-2. **Senha do admin**: `SensitiveInput` atual + nova (12+) → `useChangePassword`; toast `settings.passwordChanged`.
-3. **Aparência**: `Select` idioma e `Select` tema (`applyTheme`).
-4. **cloudflared**: instalado vs. último, `Badge` `settings.upToDate` ou botão `settings.update` (`useUpdateCloudflared`, com `loading`).
-5. **Backup**: `Button` export (baixa `GET /api/backup` como arquivo via `a[download]` + blob) e import (`input type=file` → `POST /api/backup`); `Text variant="secondary"` com `settings.backupHint`.
+Sections (each a `LayerCard`):
+1. **Cloudflare account**: account name, `settings.tokenEnding`, domain list (`Badge` per zone), `settings.replaceToken` button that opens a `Dialog` with the same flow as setup step 2 (reuse a `ConnectCloudflareForm` component extracted from `setup.tsx` in this task).
+2. **Admin password**: current + new `SensitiveInput` (12+) → `useChangePassword`; `settings.passwordChanged` toast.
+3. **Appearance**: language `Select` and theme `Select` (`applyTheme`).
+4. **cloudflared**: installed vs. latest, `settings.upToDate` `Badge` or `settings.update` button (`useUpdateCloudflared`, with `loading`).
+5. **Backup**: export `Button` (downloads `GET /api/backup` as a file via `a[download]` + blob) and import (`input type=file` → `POST /api/backup`); `Text variant="secondary"` with `settings.backupHint`.
 
-- [ ] **Step 1: Teste que falha** — `settings.test.tsx`: com `fetch` mockado, renderiza; asserta que aparece "Token ending in abcd" e o domínio `example.com`; que, com `updateAvailable: true`, aparece o botão "Update" e o clique chama `POST /api/system/cloudflared/update`; e que trocar o idioma para Português muda o título para "Configurações".
-- [ ] **Step 2: Rodar** — FAIL. **Step 3:** implementar (extraindo `ConnectCloudflareForm` para `components/connect-cloudflare-form.tsx` e usando-o em `setup.tsx`). **Step 4:** Rodar — PASS, incluindo os testes da Task 13.
+- [ ] **Step 1: Failing test** — `settings.test.tsx`: with a mocked `fetch`, renders; asserts that "Token ending in abcd" and the `example.com` domain appear; that, with `updateAvailable: true`, the "Update" button appears and clicking it calls `POST /api/system/cloudflared/update`; and that switching the language to Portuguese changes the title to "Configurações".
+- [ ] **Step 2: Run** — FAIL. **Step 3:** implement (extracting `ConnectCloudflareForm` into `components/connect-cloudflare-form.tsx` and using it in `setup.tsx`). **Step 4:** Run — PASS, including the Task 13 tests.
 - [ ] **Step 5: Commit** — `git add -A && git commit -m "feat(web): add settings page"`
 
 ---
 
-### Task 18: Arquivos de deploy e scripts Proxmox
+### Task 18: Deploy files and Proxmox scripts
 
 **Files:**
 - Create: `deploy/cloudflared@.service`, `deploy/tunnel-manager.service`, `deploy/sudoers`, `ct/cloudflared-manager.sh`, `install/cloudflared-manager-install.sh`, `ct/headers/cloudflared-manager`, `scripts/package-release.sh`
-- Test: `shellcheck` + `visudo -cf` (se disponível) + teste do pacote
+- Test: `shellcheck` + `visudo -cf` (if available) + package test
 
 - [ ] **Step 1: `deploy/cloudflared@.service`**
 ```ini
@@ -4120,7 +4120,7 @@ PrivateTmp=yes
 [Install]
 WantedBy=multi-user.target
 ```
-(`Type=notify`: o `cloudflared` envia `sd_notify` quando conecta. `StartLimitIntervalSec=0` impede o systemd de desistir em quedas longas de internet. Se `Type=notify` causar timeout de start quando não há internet, trocar para `Type=simple` — validar no teste manual.)
+(`Type=notify`: `cloudflared` sends `sd_notify` when it connects. `StartLimitIntervalSec=0` keeps systemd from giving up during long internet outages. If `Type=notify` causes a start timeout when there's no internet, switch to `Type=simple` — validate in the manual test.)
 
 - [ ] **Step 2: `deploy/tunnel-manager.service`**
 ```ini
@@ -4159,7 +4159,7 @@ Cmnd_Alias TM_APT = /usr/bin/apt-get update -qq, \
                     /usr/bin/apt-get install --only-upgrade -y cloudflared
 tunnelmgr ALL=(root) NOPASSWD: TM_UNITS, TM_APT
 ```
-O `SystemdBackend` chama `sudo -n systemctl …` e `sudo -n journalctl …` pelo nome; o `sudo` resolve pelo `secure_path` (`/usr/bin`), casando com os caminhos absolutos acima.
+`SystemdBackend` calls `sudo -n systemctl …` and `sudo -n journalctl …` by name; `sudo` resolves through `secure_path` (`/usr/bin`), matching the absolute paths above.
 
 - [ ] **Step 4: `install/cloudflared-manager-install.sh`**
 ```bash
@@ -4223,7 +4223,7 @@ motd_ssh
 customize
 cleanup_lxc
 ```
-(`setup_nodejs` e `setup_deb822_repo` vêm do `tools.func` do community-scripts carregado em `FUNCTIONS_FILE_PATH`; confirmar os nomes lendo o `install.func`/`tools.func` do commit fixado. Se `setup_nodejs` não existir, instalar via repositório NodeSource com `setup_deb822_repo "nodesource" "https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key" "https://deb.nodesource.com/node_24.x" "nodistro" "main"`.)
+(`setup_nodejs` and `setup_deb822_repo` come from community-scripts' `tools.func`, loaded via `FUNCTIONS_FILE_PATH`; confirm the names by reading `install.func`/`tools.func` at the pinned commit. If `setup_nodejs` doesn't exist, install via the NodeSource repository with `setup_deb822_repo "nodesource" "https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key" "https://deb.nodesource.com/node_24.x" "nodistro" "main"`.)
 
 - [ ] **Step 5: `ct/cloudflared-manager.sh`**
 ```bash
@@ -4300,11 +4300,11 @@ echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
 echo -e "${INFO}${YW} Access it using the following URL:${CL}"
 echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:8080${CL}"
 ```
-Nota: o `update_script` não reinicia os túneis (só o manager), e as migrações rodam no start do server.
+Note: `update_script` does not restart the tunnels (only the manager), and migrations run when the server starts.
 
-`__GH_REPO__` e `__CORE_COMMIT__` são placeholders de **configuração** (não de plano): antes do primeiro release, o executor pergunta ao usuário o `owner/repo` do GitHub e fixa `__CORE_COMMIT__` com `git ls-remote https://github.com/community-scripts/core main | cut -f1`, substituindo nos três arquivos com `sed`.
+`__GH_REPO__` and `__CORE_COMMIT__` are **configuration** placeholders (not plan placeholders): before the first release, the executor asks the user for the GitHub `owner/repo` and pins `__CORE_COMMIT__` with `git ls-remote https://github.com/community-scripts/core main | cut -f1`, substituting it in the three files with `sed`.
 
-Verificar se `build.func` exige `ct/headers/<app>` (arte ASCII do cabeçalho): se sim, criar `ct/headers/cloudflared-manager` com o texto gerado por `figlet -f slant "Cloudflared-Manager"` (ou uma linha simples se `figlet` não estiver disponível).
+Check whether `build.func` requires `ct/headers/<app>` (ASCII header art): if so, create `ct/headers/cloudflared-manager` with the text generated by `figlet -f slant "Cloudflared-Manager"` (or a simple line if `figlet` isn't available).
 
 - [ ] **Step 6: `scripts/package-release.sh`**
 ```bash
@@ -4323,27 +4323,27 @@ tar -czf "$OUT/cloudflared-manager-${VERSION}.tar.gz" -C "$OUT" "cloudflared-man
 echo "$OUT/cloudflared-manager-${VERSION}.tar.gz"
 ```
 
-- [ ] **Step 7: Verificar**
+- [ ] **Step 7: Verify**
 
-Run: `shellcheck -x -e SC1090,SC1091,SC2034,SC2154 ct/cloudflared-manager.sh install/cloudflared-manager-install.sh scripts/package-release.sh` (instalar com `brew install shellcheck` se necessário)
-Expected: sem avisos.
+Run: `shellcheck -x -e SC1090,SC1091,SC2034,SC2154 ct/cloudflared-manager.sh install/cloudflared-manager-install.sh scripts/package-release.sh` (install with `brew install shellcheck` if needed)
+Expected: no warnings.
 Run: `bash scripts/package-release.sh v0.0.0-test && tar -tzf release/cloudflared-manager-v0.0.0-test.tar.gz | head`
-Expected: contém `server.mjs`, `web/index.html`, `deploy/cloudflared@.service`, `deploy/sudoers`.
-Run (pacote funciona isolado): extrair num diretório do scratchpad e rodar `NODE_ENV=production SERVICE_BACKEND=fake DATA_DIR=<tmp> ETC_DIR=<tmp>/etc WEB_DIST=<dir>/web PORT=18081 node --disable-warning=ExperimentalWarning <dir>/server.mjs`; `curl -s localhost:18081/ | grep -q '<div id="root">'` e `curl -s localhost:18081/api/health`.
+Expected: contains `server.mjs`, `web/index.html`, `deploy/cloudflared@.service`, `deploy/sudoers`.
+Run (package works standalone): extract into a scratchpad directory and run `NODE_ENV=production SERVICE_BACKEND=fake DATA_DIR=<tmp> ETC_DIR=<tmp>/etc WEB_DIST=<dir>/web PORT=18081 node --disable-warning=ExperimentalWarning <dir>/server.mjs`; `curl -s localhost:18081/ | grep -q '<div id="root">'` and `curl -s localhost:18081/api/health`.
 
 - [ ] **Step 8: Commit** — `git add -A && git commit -m "feat: add Proxmox ct/install scripts, systemd units and release packaging"`
 
 ---
 
-### Task 19: E2E com Playwright
+### Task 19: E2E with Playwright
 
 **Files:**
 - Create: `playwright.config.ts`, `e2e/global-setup.ts`, `e2e/fake-cf-server.ts`, `e2e/flow.spec.ts`
 
 **Interfaces:**
-- Consumes: `startFakeCloudflare` (Task 4), o bundle do server (Task 11) e o build da web (Task 12).
+- Consumes: `startFakeCloudflare` (Task 4), the server bundle (Task 11) and the web build (Task 12).
 
-`e2e/fake-cf-server.ts`: script executável (via `tsx`) que chama `startFakeCloudflare()` numa porta fixa (`FAKE_CF_PORT=18787`) — adaptar `startFakeCloudflare` para aceitar `{ port }` opcional — e imprime o token.
+`e2e/fake-cf-server.ts`: executable script (via `tsx`) that calls `startFakeCloudflare()` on a fixed port (`FAKE_CF_PORT=18787`) — adapt `startFakeCloudflare` to accept an optional `{ port }` — and prints the token.
 
 `playwright.config.ts`:
 ```ts
@@ -4360,22 +4360,22 @@ export default defineConfig({
   ],
 });
 ```
-(Adicionar `.e2e-data/` ao `.gitignore`.)
+(Add `.e2e-data/` to `.gitignore`.)
 
-`e2e/flow.spec.ts` — um teste sequencial:
-1. `/` redireciona para `/setup`; cria admin `admin` / `a-very-long-password`.
-2. Cola o `FAKE_TOKEN` (importar de `apps/server/test/fake-cloudflare.ts`) → vê "Connected to Home Lab" e "2 domains found" → "Go to dashboard".
-3. Estado vazio visível → "Create tunnel" → nome `home` → cai em `/tunnels/<id>?tab=routes`.
-4. "Add public hostname" → sub `ha`, domínio `example.com`, URL `10.0.0.5:8123` → salvar → a linha `ha.example.com` aparece acima da linha do catch-all.
-5. Aba "Settings" → desliga keep-alive → salvar → badge "Keep-alive off".
-6. "Delete" → digita `home` → confirma → volta ao dashboard vazio.
-7. Troca o idioma para Português → título "Túneis".
+`e2e/flow.spec.ts` — a sequential test:
+1. `/` redirects to `/setup`; creates admin `admin` / `a-very-long-password`.
+2. Pastes the `FAKE_TOKEN` (imported from `apps/server/test/fake-cloudflare.ts`) → sees "Connected to Home Lab" and "2 domains found" → "Go to dashboard".
+3. Empty state visible → "Create tunnel" → name `home` → lands on `/tunnels/<id>?tab=routes`.
+4. "Add public hostname" → sub `ha`, domain `example.com`, URL `10.0.0.5:8123` → save → the `ha.example.com` row appears above the catch-all row.
+5. "Settings" tab → turns off keep-alive → save → "Keep-alive off" badge.
+6. "Delete" → types `home` → confirms → returns to the empty dashboard.
+7. Switches the language to Portuguese → title "Túneis".
 
-- [ ] **Step 1:** escrever os arquivos. **Step 2:** `pnpm exec playwright install chromium && pnpm e2e` → PASS (iterar nos seletores até passar; nunca relaxar as asserções de comportamento). **Step 3:** Commit — `git add -A && git commit -m "test: add end-to-end flow with fake Cloudflare"`
+- [ ] **Step 1:** write the files. **Step 2:** `pnpm exec playwright install chromium && pnpm e2e` → PASS (iterate on selectors until it passes; never relax the behavior assertions). **Step 3:** Commit — `git add -A && git commit -m "test: add end-to-end flow with fake Cloudflare"`
 
 ---
 
-### Task 20: CI, release e documentação
+### Task 20: CI, release and documentation
 
 **Files:**
 - Create: `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `README.md`, `docs/manual-test-checklist.md`
@@ -4400,7 +4400,7 @@ jobs:
       - run: sudo apt-get install -y shellcheck && shellcheck -x -e SC1090,SC1091,SC2034,SC2154 ct/*.sh install/*.sh scripts/*.sh
 ```
 
-- [ ] **Step 2: `release.yml`** (dispara em tag `v*`)
+- [ ] **Step 2: `release.yml`** (triggers on tag `v*`)
 ```yaml
 name: release
 on: { push: { tags: ['v*'] } }
@@ -4419,28 +4419,28 @@ jobs:
         env: { GH_TOKEN: '${{ github.token }}' }
 ```
 
-- [ ] **Step 3: `README.md` (pt-BR)** — o que é; comando de instalação; primeiro acesso (admin + token, com lista de permissões); como funciona o keep-alive (3 camadas); vários domínios; atualização (rodar o mesmo comando dentro do LXC / `update`); desenvolvimento local (`pnpm dev` com `SERVICE_BACKEND=fake` + `CF_API_BASE` apontando para o fake ou para a API real); estrutura do repo; limitações conhecidas (avisos de buffer UDP do QUIC e `ping_group_range` em LXC não-privilegiado).
+- [ ] **Step 3: `README.md` (pt-BR)** — what it is; install command; first access (admin + token, with the permission list); how keep-alive works (3 layers); multiple domains; updating (run the same command inside the LXC / `update`); local development (`pnpm dev` with `SERVICE_BACKEND=fake` + `CF_API_BASE` pointing at the fake or the real API); repo structure; known limitations (QUIC UDP buffer warnings and `ping_group_range` in an unprivileged LXC).
 
-- [ ] **Step 4: `docs/manual-test-checklist.md` (pt-BR)** — checklist no Proxmox real:
-  - instalar com o comando; LXC criado com 1 vCPU / 1 GB / 4 GB; `http://<ip>:8080` abre;
-  - setup completo com token real; zonas corretas;
-  - criar túnel; `systemctl status cloudflared@<id>` ativo; painel Zero Trust mostra "Healthy";
-  - rota para um serviço real em cada domínio; acesso externo funciona; CNAME criado no DNS;
-  - `pct reboot <ctid>` → túnel volta sozinho;
-  - `systemctl kill -s KILL cloudflared@<id>` → systemd reinicia;
-  - desconectar a internet do host por 5 min → sem loop de restart; volta sozinho; evento "No internet";
-  - `Type=notify` sem internet não trava o start (senão trocar para `simple`);
-  - remover rota → CNAME some; excluir túnel → some da Cloudflare;
-  - atualizar cloudflared pela UI; rodar `update` do script;
-  - login com senha errada 6× → rate limit.
+- [ ] **Step 4: `docs/manual-test-checklist.md` (pt-BR)** — checklist on real Proxmox:
+  - install with the command; LXC created with 1 vCPU / 1 GB / 4 GB; `http://<ip>:8080` opens;
+  - complete setup with a real token; correct zones;
+  - create a tunnel; `systemctl status cloudflared@<id>` active; Zero Trust dashboard shows "Healthy";
+  - route to a real service on each domain; external access works; CNAME created in DNS;
+  - `pct reboot <ctid>` → tunnel comes back on its own;
+  - `systemctl kill -s KILL cloudflared@<id>` → systemd restarts it;
+  - disconnect the host's internet for 5 min → no restart loop; recovers on its own; "No internet" event;
+  - `Type=notify` without internet doesn't hang the start (otherwise switch to `simple`);
+  - remove a route → CNAME disappears; delete the tunnel → it disappears from Cloudflare;
+  - update cloudflared through the UI; run the script's `update`;
+  - login with the wrong password 6× → rate limit.
 
 - [ ] **Step 5: Commit** — `git add -A && git commit -m "ci: add CI and release workflows; docs: add README and manual checklist"`
 
 ---
 
-### Task 21: Verificação visual e revisão final
+### Task 21: Visual verification and final review
 
-- [ ] **Step 1:** subir `pnpm dev` com o server em modo fake apontando para o fake da Cloudflare (`CF_API_BASE=http://127.0.0.1:18787`) e abrir `http://localhost:5173` com Playwright/Chrome. Percorrer setup → dashboard → túnel → cada aba → settings, em **en** e **pt-BR**, tema **claro** e **escuro**, largura desktop e 390 px. Tirar screenshots e comparar com os do painel da Cloudflare coletados na Task 12. Corrigir desvios de layout (espaçamentos, hierarquia de títulos, cores só via tokens `kumo-*`).
-- [ ] **Step 2:** `pnpm typecheck && pnpm test && pnpm e2e` — tudo verde; colar a saída no resumo final.
-- [ ] **Step 3:** revisão do branch inteiro por um revisor novo (skill `superpowers:requesting-code-review`), foco na seção "Review Focus" deste plano, em segurança (sudoers, validação de UUID, cookie, token nunca exposto) e no rollback de rotas.
-- [ ] **Step 4:** aplicar correções e commitar (`fix: …`).
+- [ ] **Step 1:** bring up `pnpm dev` with the server in fake mode pointing at the Cloudflare fake (`CF_API_BASE=http://127.0.0.1:18787`) and open `http://localhost:5173` with Playwright/Chrome. Walk through setup → dashboard → tunnel → each tab → settings, in **en** and **pt-BR**, **light** and **dark** theme, desktop width and 390 px. Take screenshots and compare them with the Cloudflare dashboard ones collected in Task 12. Fix any layout deviations (spacing, title hierarchy, colors only via `kumo-*` tokens).
+- [ ] **Step 2:** `pnpm typecheck && pnpm test && pnpm e2e` — everything green; paste the output in the final summary.
+- [ ] **Step 3:** review of the entire branch by a fresh reviewer (`superpowers:requesting-code-review` skill), focused on this plan's "Review Focus" section, on security (sudoers, UUID validation, cookie, token never exposed) and on route rollback.
+- [ ] **Step 4:** apply fixes and commit (`fix: …`).

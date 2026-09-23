@@ -1,43 +1,48 @@
-# Checklist de teste manual no Proxmox
+# Manual test checklist on Proxmox
 
-Use antes de cada release. Marque cada item com o resultado observado.
+Run before each release. Record the observed result for each item.
 
-## Instalação
+## Installation
 
-- [ ] Rodar o comando de instalação no host; o LXC é criado com Debian 13, 1 vCPU, 1 GB RAM, 4 GB disco, não-privilegiado.
-- [ ] `http://<ip>:8080` abre a tela de boas-vindas.
-- [ ] Dentro do LXC: `systemctl status tunnel-manager` ativo; `ls -l /etc/tunnel-manager/secret.key` com modo `-rw-------` e dono `tunnelmgr`.
-- [ ] `sudo -u tunnelmgr sudo -n -l` lista somente os comandos do sudoers.
+- [ ] Run the installation command on the host; the LXC is created with Debian 13, 1 vCPU, 1 GB RAM, 4 GB disk, unprivileged.
+- [ ] `http://<ip>:8080` opens the welcome screen.
+- [ ] Inside the LXC: `systemctl status tunnel-manager` is active; `ls -l /etc/tunnel-manager/secret.key` shows mode `-rw-------` and owner `tunnelmgr`.
+- [ ] `ls -ln /opt/tunnel-manager` shows every file owned by root (uid 0).
+- [ ] `sudo -u tunnelmgr sudo -n -l` lists only the sudoers rules.
 
 ## Setup
 
-- [ ] Criar admin; senha curta é rejeitada.
-- [ ] Botão "Criar token na Cloudflare" abre o painel com as 3 permissões preenchidas.
-- [ ] Colar o token; se houver várias contas, a escolha de conta aparece; os domínios corretos são listados.
+- [ ] Create the admin; a short password is rejected.
+- [ ] The "Create token in Cloudflare" button opens the dashboard with the 3 permissions filled in.
+- [ ] Paste the token; with several accounts, the account picker appears; the correct domains are listed.
 
-## Túneis
+## Tunnels
 
-- [ ] Criar túnel; `systemctl status cloudflared@<id>` ativo; o painel Zero Trust mostra o túnel "Healthy".
-- [ ] Adicionar hostname em cada um de dois domínios; o acesso externo funciona; o CNAME aparece no DNS de cada domínio.
-- [ ] Adicionar hostname que já tem registro A: a interface pede confirmação para substituir.
-- [ ] Editar a rota no painel Zero Trust e salvar na interface sem recarregar: aparece o aviso de conflito de versão.
-- [ ] Remover rota: o CNAME some. Remover desmarcando "Excluir também o registro DNS": o CNAME fica.
-- [ ] Logs ao vivo aparecem na aba Logs; pausar e retomar funciona.
-- [ ] Gráfico de tráfego aparece após alguns minutos de uso.
+- [ ] Create a tunnel; `systemctl status cloudflared@<id>` is active; the Zero Trust dashboard shows the tunnel as "Healthy".
+- [ ] Add a hostname in each of two domains; external access works; the CNAME appears in each domain's DNS.
+- [ ] Add a hostname that already has an A record: the UI asks for confirmation before replacing it.
+- [ ] Add a hostname that only has a TXT record: the TXT record is left untouched.
+- [ ] Edit the route in the Zero Trust dashboard while a dialog is open in the UI, then save: the version-conflict warning appears and nothing is overwritten.
+- [ ] Remove a route: the CNAME disappears. Remove one with "Also delete the DNS record" unchecked: the CNAME stays.
+- [ ] Edit a route of a tunnel whose origin options were set in the dashboard (e.g. HTTP/2 origin): saving works and the options are kept.
+- [ ] Live logs appear in the Logs tab; pause and resume work.
+- [ ] The traffic chart appears after a few minutes of use.
 
-## Resiliência
+## Resilience
 
-- [ ] `pct reboot <ctid>`: interface e túneis voltam sozinhos.
-- [ ] `systemctl kill -s KILL cloudflared@<id>`: o systemd reinicia em ~5 s.
-- [ ] Desligar a internet do host por 5 min: nenhum loop de reinício; evento "Sem internet"; o túnel volta sozinho quando a rede volta.
-- [ ] Com a internet desligada, `systemctl restart cloudflared@<id>` não trava (validar `Type=notify` + `TimeoutStartSec=0`).
-- [ ] Parar o túnel pela interface: o watchdog não o reinicia.
+- [ ] `pct reboot <ctid>`: the UI and tunnels come back on their own.
+- [ ] `systemctl kill -s KILL cloudflared@<id>`: systemd restarts it within ~5 s.
+- [ ] Disconnect the host from the internet for 5 min: no restart loop; a "No internet" event; the tunnel reconnects by itself when the network returns.
+- [ ] With the internet disconnected, Start/Restart in the UI return immediately (units start with `--no-block`).
+- [ ] Validate `Type=notify` + `TimeoutStartSec=0` in an unprivileged LXC: the unit reaches `active` once connected.
+- [ ] Stop a tunnel from the UI: the watchdog does not restart it.
+- [ ] After the watchdog gives up ("Gave up"), fix the network: the state returns to healthy on its own.
 
-## Manutenção
+## Maintenance
 
-- [ ] Atualizar o `cloudflared` pela tela de Configurações; os túneis ativos reiniciam.
-- [ ] Rodar o `update` do script dentro do LXC; os túneis não caem; `/opt/tunnel-manager.old` existe.
-- [ ] Exportar e importar backup.
-- [ ] Excluir túnel: some da Cloudflare, do DNS e do systemd.
-- [ ] 6 logins errados seguidos: a sexta tentativa é bloqueada por 1 minuto.
-- [ ] Trocar idioma e tema; a escolha persiste após recarregar.
+- [ ] Update `cloudflared` from the Settings page; active tunnels restart.
+- [ ] Run the script's `update` inside the LXC; tunnels stay up; `/opt/tunnel-manager.old` exists.
+- [ ] Export and import a backup.
+- [ ] Delete a tunnel: it disappears from Cloudflare, DNS and systemd.
+- [ ] 6 wrong logins in a row: the sixth attempt is blocked for 1 minute.
+- [ ] Switch language and theme; the choice persists after reloading.
