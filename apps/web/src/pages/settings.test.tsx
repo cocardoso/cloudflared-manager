@@ -9,8 +9,8 @@ const routes = {
   'GET /api/cloudflare/status': () => json({
     connected: true, tokenSuffix: 'abcd', lastAccountId: null,
     accounts: [
-      { id: 'a'.repeat(32), name: 'Home Lab', zones: [{ id: '1', name: 'example.com' }] },
-      { id: 'b'.repeat(32), name: 'Second Org', zones: [{ id: '2', name: 'second.net' }] },
+      { id: 'a'.repeat(32), name: 'Home Lab', enabled: true, zones: [{ id: '1', name: 'example.com' }] },
+      { id: 'b'.repeat(32), name: 'Second Org', enabled: false, zones: [{ id: '2', name: 'second.net' }] },
     ],
   }),
   'GET /api/system/cloudflared': () => json({ installed: '2026.9.1', latest: '2026.10.0', updateAvailable: true, canSelfUpdate: true }),
@@ -34,6 +34,17 @@ describe('SettingsPage', () => {
     expect(home.textContent).toContain('example.com');
     expect(home.textContent).not.toContain('second.net');
     expect((screen.getByText('Second Org').closest('[data-account]') as HTMLElement).textContent).toContain('second.net');
+  });
+  it('turns accounts on and off', async () => {
+    const calls = mockApi({ ...routes, 'PUT /api/cloudflare/accounts': () => json({ code: 'ACCOUNT_IN_USE', message: 'x', details: { accounts: ['Home Lab'] } }, 409) });
+    renderWithProviders(<SettingsPage />);
+    const second = await screen.findByRole('checkbox', { name: /Second Org/ });
+    expect(second.getAttribute('aria-checked')).toBe('false');
+    await userEvent.click(second);
+    await userEvent.click(screen.getByRole('checkbox', { name: /Home Lab/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save accounts' }));
+    await waitFor(() => expect(calls.find((c) => c.key === 'PUT /api/cloudflare/accounts')?.body).toEqual({ enabled: ['b'.repeat(32)] }));
+    expect(await screen.findByText(/Tunnels of Home Lab run on this host/)).toBeTruthy();
   });
   it('updates cloudflared', async () => {
     const calls = mockApi(routes);

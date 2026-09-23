@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { useCloudflareStatus, useCreateTunnel } from '../api/hooks';
+import { activeAccounts } from '../lib/accounts';
 import { ErrorBanner } from './error-banner';
 
 export function CreateTunnelDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -11,7 +12,7 @@ export function CreateTunnelDialog({ open, onOpenChange }: { open: boolean; onOp
   const nav = useNavigate();
   const create = useCreateTunnel();
   const cf = useCloudflareStatus().data;
-  const accounts = cf?.accounts ?? [];
+  const accounts = activeAccounts(cf);
   const multi = accounts.length > 1;
   const [name, setName] = useState('');
   const [picked, setPicked] = useState<string | null>(null);

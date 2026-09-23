@@ -14,7 +14,8 @@ Run before each release, for both deployment targets. Record the observed result
 
 - [ ] Create the admin; a short password is rejected.
 - [ ] The "Create token in Cloudflare" button opens the dashboard with the 3 permissions filled in.
-- [ ] Paste the token; no account has to be picked; "Connected to N accounts" lists every account; Settings shows each account with its domains.
+- [ ] Paste the token; "Connected to N accounts" lists every account; with several accounts a checkbox per account (all checked) lets you save the active ones.
+- [ ] Settings lists every account with its domains; unchecking an account with tunnels running here is refused; unchecking another one hides it from the dashboard and the create dialog.
 
 ## Tunnels
 

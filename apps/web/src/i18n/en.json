@@ -82,7 +82,8 @@
     "CF_PERMISSION_MISSING_ACCOUNT": "The token cannot use {{permission}} on account \"{{account}}\". Check that your role in that account includes Cloudflare Tunnel.",
     "cloudflareSaid": "Cloudflare: {{detail}}",
     "CLOUDFLARED_UPDATE_UNSUPPORTED": "cloudflared is bundled in the Docker image and updated with each new image release. Pull the latest image and recreate the container to get it.",
-    "ACCOUNT_NOT_FOUND": "This Cloudflare account is not reachable with the current token."
+    "ACCOUNT_NOT_FOUND": "This Cloudflare account is not reachable with the current token.",
+    "ACCOUNT_IN_USE": "Tunnels of {{accounts}} run on this host. Delete them before turning the account off."
   },
   "setup": {
     "title": "Welcome",
@@ -297,5 +298,10 @@
     "routes": "{{added}} added, {{removed}} removed",
     "attempt": "Attempt {{n}} of {{max}}",
     "settings": "Settings updated"
+  },
+  "accounts": {
+    "hint": "Choose the accounts this app works with. Tunnels are listed and created only in the checked accounts.",
+    "save": "Save accounts",
+    "saved": "Accounts saved"
   }
 }

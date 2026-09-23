@@ -5,6 +5,7 @@ import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
 import { useChangePassword, useCloudflareStatus, useCloudflaredInfo, useErrorMessage, useUpdateCloudflared } from '../api/hooks';
+import { AccountsPicker } from '../components/accounts-picker';
 import { ConnectCloudflareForm } from '../components/connect-cloudflare-form';
 import { ErrorBanner } from '../components/error-banner';
 import { PageHeader } from '../components/page-header';
@@ -34,18 +35,10 @@ function AccountSection() {
           <Button onClick={() => setReplacing(true)}>{t('settings.replaceToken')}</Button>
         </div>
       )}
-      {d?.accounts.map((a) => (
-        <div key={a.id} data-account={a.id} className="flex flex-col gap-2">
-          <Text bold>{a.name}</Text>
-          {a.zones.length ? (
-            <div className="flex flex-wrap gap-1.5">
-              {a.zones.map((z) => <Badge key={z.id} variant="neutral">{z.name}</Badge>)}
-            </div>
-          ) : (
-            <Text variant="secondary" size="sm">{t('settings.noDomains')}</Text>
-          )}
-        </div>
-      ))}
+      {!!d?.accounts.length && (
+        // Remount when the account list changes so the checkboxes start from the saved selection.
+        <AccountsPicker key={d.accounts.map((a) => `${a.id}:${a.enabled}`).join()} accounts={d.accounts} />
+      )}
       <Dialog.Root open={replacing} onOpenChange={setReplacing}>
         <Dialog className="p-6" size="lg">
           <div className="flex flex-col gap-4">

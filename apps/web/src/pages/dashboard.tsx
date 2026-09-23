@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { useCloudflareStatus, useCloudflaredInfo, useRecentEvents, useTunnels } from '../api/hooks';
 import { CreateTunnelDialog } from '../components/create-tunnel-dialog';
+import { activeAccounts } from '../lib/accounts';
 import { ErrorBanner } from '../components/error-banner';
 import { EventList } from '../components/event-list';
 import { PageHeader } from '../components/page-header';
@@ -20,15 +21,17 @@ export function DashboardPage() {
   const [creating, setCreating] = useState(false);
   const [query, setQuery] = useState('');
   const [accountFilter, setAccountFilter] = useState('all');
-  const accounts = useCloudflareStatus().data?.accounts ?? [];
+  const accounts = activeAccounts(useCloudflareStatus().data);
   const multi = accounts.length > 1;
+  // An account turned off (or gone) since it was picked falls back to all accounts.
+  const filter = accounts.some((a) => a.id === accountFilter) ? accountFilter : 'all';
 
   const list = useMemo(() => tunnels.data?.tunnels ?? [], [tunnels.data]);
   const unavailable = tunnels.data?.unavailableAccounts ?? [];
   // The account filter drives the cards too; the name search only narrows the table.
   const inAccount = useMemo(
-    () => (multi && accountFilter !== 'all' ? list.filter((x) => x.account.id === accountFilter) : list),
-    [list, multi, accountFilter],
+    () => (multi && filter !== 'all' ? list.filter((x) => x.account.id === filter) : list),
+    [list, multi, filter],
   );
   const filtered = useMemo(() => inAccount.filter((x) => x.name.toLowerCase().includes(query.trim().toLowerCase())), [inAccount, query]);
   const names = useMemo(() => Object.fromEntries(list.map((x) => [x.id, x.name])), [list]);
@@ -91,7 +94,7 @@ export function DashboardPage() {
                 <Select
                   className="sm:w-56"
                   label={t('dashboard.account')}
-                  value={accountFilter}
+                  value={filter}
                   onValueChange={(v) => setAccountFilter(String(v))}
                   items={{ all: t('dashboard.allAccounts'), ...Object.fromEntries(accounts.map((a) => [a.id, a.name])) }}
                 />

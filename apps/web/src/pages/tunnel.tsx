@@ -2,6 +2,7 @@ import { Badge, Banner, Breadcrumbs, Button, Loader, Tabs, Toast } from '@cloudf
 import { ArrowClockwiseIcon, PlayIcon, StopIcon } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import { useParams, useSearchParams } from 'react-router';
+import { activeAccounts } from '../lib/accounts';
 import { useCloudflareStatus, useErrorMessage, useTunnel, useTunnelAction } from '../api/hooks';
 import { ErrorBanner } from '../components/error-banner';
 import { PageHeader } from '../components/page-header';
@@ -20,7 +21,7 @@ export function TunnelPage() {
   const { id = '' } = useParams();
   const [params, setParams] = useSearchParams();
   const tunnel = useTunnel(id);
-  const multiAccount = (useCloudflareStatus().data?.accounts.length ?? 0) > 1;
+  const multiAccount = activeAccounts(useCloudflareStatus().data).length > 1;
   const action = useTunnelAction(id);
   const toasts = Toast.useToastManager();
   const msg = useErrorMessage();

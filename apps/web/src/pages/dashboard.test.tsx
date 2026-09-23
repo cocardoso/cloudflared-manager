@@ -1,4 +1,5 @@
-import { screen, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
+import { focusManager } from '@tanstack/react-query';
 import userEvent from '@testing-library/user-event';
 import type { TunnelSummary } from '@tm/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,8 +14,11 @@ beforeEach(async () => {
 
 const HOME = { id: 'a'.repeat(32), name: 'Home Lab' };
 const SECOND = { id: 'b'.repeat(32), name: 'Second Org' };
-const oneAccount = { connected: true, tokenSuffix: 'abcd', lastAccountId: null, accounts: [{ ...HOME, zones: [] }] };
-const twoAccounts = { connected: true, tokenSuffix: 'abcd', lastAccountId: SECOND.id, accounts: [{ ...HOME, zones: [] }, { ...SECOND, zones: [] }] };
+const oneAccount = { connected: true, tokenSuffix: 'abcd', lastAccountId: null, accounts: [{ ...HOME, enabled: true, zones: [] }] };
+const twoAccounts = {
+  connected: true, tokenSuffix: 'abcd', lastAccountId: SECOND.id,
+  accounts: [{ ...HOME, enabled: true, zones: [] }, { ...SECOND, enabled: true, zones: [] }, { id: 'c'.repeat(32), name: 'Inactive Org', enabled: false, zones: [] }],
+};
 const tunnel = (name: string, account: typeof HOME, id: string): TunnelSummary => ({
   id, name, account, createdAt: '', remote: true, managedHere: true, edgeStatus: 'healthy', connections: [],
   local: 'active', activeSince: null, watchdog: 'healthy', routeCount: 0,
@@ -123,5 +127,27 @@ describe('DashboardPage', () => {
     expect(await within(dialog).findByText('Could not load your Cloudflare accounts. Try again in a moment.')).toBeTruthy();
     await userEvent.type(within(dialog).getByLabelText('Tunnel name'), 'home');
     expect(within(dialog).getByRole('button', { name: 'Create' }).hasAttribute('disabled')).toBe(true);
+  });
+  it('ignores inactive accounts and falls back to all accounts when the filtered one is turned off', async () => {
+    let status = twoAccounts;
+    mockApi({
+      ...common,
+      'GET /api/cloudflare/status': () => json(status),
+      'GET /api/tunnels': () => json({
+        tunnels: [tunnel('home', HOME, '6ff42ae2-765d-4adf-8112-31c55c1551ef'), tunnel('work', SECOND, '7ff42ae2-765d-4adf-8112-31c55c1551ef')],
+        unavailableAccounts: [],
+      }),
+    });
+    renderWithProviders(<DashboardPage />);
+    await userEvent.click(await screen.findByRole('combobox', { name: 'Account' }));
+    expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['All accounts', 'Home Lab', 'Second Org']);
+    await userEvent.click(screen.getByRole('option', { name: 'Second Org' }));
+    expect(screen.getAllByRole('link').map((l) => l.textContent)).toEqual(['work']);
+    status = { ...twoAccounts, accounts: twoAccounts.accounts.map((a) => (a.id === SECOND.id ? { ...a, enabled: false } : a)) };
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    await waitFor(() => expect(screen.getAllByRole('link').map((l) => l.textContent)).toEqual(['home', 'work']));
   });
 });

@@ -43,7 +43,7 @@ describe('TunnelPage', () => {
       [`GET /api/tunnels/${ID}`]: () => json(tunnel),
       'GET /api/cloudflare/status': () => json({
         connected: true, tokenSuffix: 'abcd', lastAccountId: null,
-        accounts: [{ id: 'a'.repeat(32), name: 'Home Lab', zones: [] }, { id: 'b'.repeat(32), name: 'Second Org', zones: [] }],
+        accounts: [{ id: 'a'.repeat(32), name: 'Home Lab', enabled: true, zones: [] }, { id: 'b'.repeat(32), name: 'Second Org', enabled: true, zones: [] }],
       }),
     });
     renderWithProviders(page(), { route: `/tunnels/${ID}` });

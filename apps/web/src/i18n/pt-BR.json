@@ -82,7 +82,8 @@
     "CF_PERMISSION_MISSING_ACCOUNT": "O token não consegue usar {{permission}} na conta \"{{account}}\". Verifique se o seu papel nessa conta inclui Cloudflare Tunnel.",
     "cloudflareSaid": "Cloudflare: {{detail}}",
     "CLOUDFLARED_UPDATE_UNSUPPORTED": "O cloudflared vem dentro da imagem Docker e é atualizado a cada nova versão da imagem. Baixe a imagem mais recente e recrie o container para recebê-lo.",
-    "ACCOUNT_NOT_FOUND": "Esta conta Cloudflare não está acessível com o token atual."
+    "ACCOUNT_NOT_FOUND": "Esta conta Cloudflare não está acessível com o token atual.",
+    "ACCOUNT_IN_USE": "Túneis de {{accounts}} rodam neste host. Apague-os antes de desativar a conta."
   },
   "setup": {
     "title": "Boas-vindas",
@@ -297,5 +298,10 @@
     "routes": "{{added}} adicionados, {{removed}} removidos",
     "attempt": "Tentativa {{n}} de {{max}}",
     "settings": "Configurações atualizadas"
+  },
+  "accounts": {
+    "hint": "Escolha as contas com que este app trabalha. Os túneis são listados e criados apenas nas contas marcadas.",
+    "save": "Salvar contas",
+    "saved": "Contas salvas"
   }
 }

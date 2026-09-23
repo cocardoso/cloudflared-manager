@@ -65,13 +65,14 @@ describe('SetupPage', () => {
     const calls = mockApi({
       'GET /api/setup/status': () => json({ adminCreated: true, cloudflareConnected: connected }),
       'GET /api/auth/me': () => json({ username: 'admin' }),
+      'PUT /api/cloudflare/accounts': () => json({ connected: true, tokenSuffix: 'abcd', lastAccountId: null, accounts: [] }),
       'POST /api/cloudflare/token': () => {
         connected = true;
         return json({
           connected: true, tokenSuffix: 'abcd', lastAccountId: null,
           accounts: [
-            { id: 'a'.repeat(32), name: 'UPCAST', zones: [{ id: '1', name: 'upcast.com' }] },
-            { id: 'b'.repeat(32), name: 'INTERCASE', zones: [{ id: '2', name: 'cloudhub.com.br' }, { id: '3', name: 'intercase.com' }] },
+            { id: 'a'.repeat(32), name: 'UPCAST', enabled: true, zones: [{ id: '1', name: 'upcast.com' }] },
+            { id: 'b'.repeat(32), name: 'INTERCASE', enabled: true, zones: [{ id: '2', name: 'cloudhub.com.br' }, { id: '3', name: 'intercase.com' }] },
           ],
         });
       },
@@ -83,5 +84,10 @@ describe('SetupPage', () => {
     expect(await screen.findByText('Connected to 2 accounts')).toBeTruthy();
     expect(screen.getByText('UPCAST, INTERCASE · 3 domains')).toBeTruthy();
     expect(calls.find((c) => c.key === 'POST /api/cloudflare/token')!.body).toEqual({ token: 'x'.repeat(40) });
+    // Several accounts: choose which ones the app works with.
+    expect((screen.getByRole('checkbox', { name: /UPCAST/ }) as HTMLInputElement).getAttribute('aria-checked')).toBe('true');
+    await userEvent.click(screen.getByRole('checkbox', { name: /INTERCASE/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save accounts' }));
+    await waitFor(() => expect(calls.find((c) => c.key === 'PUT /api/cloudflare/accounts')?.body).toEqual({ enabled: ['a'.repeat(32)] }));
   });
 });

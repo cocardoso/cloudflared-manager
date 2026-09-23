@@ -17,7 +17,10 @@ export const qk = {
 export const useSetupStatus = () => useQuery({ queryKey: qk.setup, queryFn: () => api.get<SetupStatus>('/setup/status') });
 export const useMe = (enabled = true) =>
   useQuery({ queryKey: qk.me, queryFn: () => api.get<{ username: string }>('/auth/me'), retry: false, enabled });
-export const useCloudflareStatus = () => useQuery({ queryKey: qk.cf, queryFn: () => api.get<CloudflareStatus>('/cloudflare/status') });
+/** Poll while connected but without accounts: discovery failed and should be retried. */
+export const statusRefetchInterval = (s: CloudflareStatus | undefined) => (s?.connected && s.accounts.length === 0 ? 10_000 : false);
+export const useCloudflareStatus = () =>
+  useQuery({ queryKey: qk.cf, queryFn: () => api.get<CloudflareStatus>('/cloudflare/status'), refetchInterval: (q) => statusRefetchInterval(q.state.data) });
 export const useTunnels = () =>
   useQuery({ queryKey: qk.tunnels, queryFn: () => api.get<TunnelList>('/tunnels'), refetchInterval: 10_000 });
 export const useTunnel = (id: string) =>
@@ -48,6 +51,8 @@ export const useChangePassword = () =>
   useMutation({ mutationFn: (b: { currentPassword: string; newPassword: string }) => api.post('/auth/password', b) });
 export const useConnectCloudflare = () =>
   useInvalidating((b: { token: string }) => api.post<CloudflareStatus>('/cloudflare/token', b), [qk.cf, qk.setup, qk.tunnels]);
+export const useSaveAccounts = () =>
+  useInvalidating((enabled: string[]) => api.put<CloudflareStatus>('/cloudflare/accounts', { enabled }), [qk.cf, qk.tunnels]);
 export const useCreateTunnel = () =>
   useInvalidating((b: { name: string; accountId?: string }) => api.post<TunnelSummary>('/tunnels', b), [qk.tunnels, qk.events(), qk.cf]);
 export const useUpdateTunnel = (id: string) =>
@@ -70,9 +75,9 @@ export function useErrorMessage() {
   const { t } = useTranslation();
   return (e: unknown) => {
     if (e instanceof ApiError) {
-      const d = (e.details ?? {}) as { permission?: string; accountName?: string; cloudflare?: { code: number; message: string }[] };
+      const d = (e.details ?? {}) as { permission?: string; accountName?: string; accounts?: string[]; cloudflare?: { code: number; message: string }[] };
       const key = e.code === 'CF_PERMISSION_MISSING' && d.accountName ? 'errors.CF_PERMISSION_MISSING_ACCOUNT' : `errors.${e.code}`;
-      const text = t(key, { permission: d.permission, account: d.accountName, defaultValue: e.message });
+      const text = t(key, { permission: d.permission, account: d.accountName, accounts: d.accounts?.join(', '), defaultValue: e.message });
       const cf = Array.isArray(d.cloudflare) ? d.cloudflare.map((x) => `${x.code} ${x.message}`).join('; ') : '';
       return cf ? `${text} ${t('errors.cloudflareSaid', { detail: cf })}` : text;
     }

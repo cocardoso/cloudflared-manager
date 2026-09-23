@@ -5,6 +5,7 @@ import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useConnectCloudflare } from '../api/hooks';
 import { buildTokenTemplateUrl } from '../lib/token-link';
+import { AccountsPicker } from './accounts-picker';
 import { ErrorBanner } from './error-banner';
 
 /** Token paste form shared by the setup wizard and the settings page. */
@@ -23,7 +24,7 @@ export function ConnectCloudflareForm({ onConnected }: { onConnected?: (s: Cloud
   };
 
   if (result) {
-    return (
+    const banner = (
       <Banner
         icon={<CheckCircleIcon />}
         title={t('setup.connectedAccounts', { count: result.accounts.length })}
@@ -32,6 +33,13 @@ export function ConnectCloudflareForm({ onConnected }: { onConnected?: (s: Cloud
           count: result.accounts.reduce((n, a) => n + a.zones.length, 0),
         })}
       />
+    );
+    if (result.accounts.length < 2) return banner;
+    return (
+      <div className="flex flex-col gap-4">
+        {banner}
+        <AccountsPicker accounts={result.accounts} />
+      </div>
     );
   }
 

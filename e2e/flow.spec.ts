@@ -94,3 +94,18 @@ test('language switch persists', async ({ page }) => {
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Configurações' })).toBeVisible();
 });
+
+test('turning an account off hides it from tunnel creation', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByLabel('Username').fill('admin');
+  await page.getByLabel('Password', { exact: true }).fill('a-very-long-password');
+  await page.getByRole('button', { name: 'Log in' }).click();
+  await page.getByRole('link', { name: 'Settings' }).click();
+  await page.getByRole('checkbox', { name: 'Second Org' }).click();
+  await page.getByRole('button', { name: 'Save accounts' }).click();
+  await expect(page.getByText('Accounts saved')).toBeVisible();
+  await page.getByRole('link', { name: 'Tunnels' }).click();
+  await page.getByRole('button', { name: 'Create tunnel' }).first().click();
+  await expect(page.getByRole('dialog').getByLabel('Tunnel name')).toBeVisible();
+  await expect(page.getByRole('dialog').getByRole('combobox', { name: 'Account' })).toHaveCount(0);
+});
