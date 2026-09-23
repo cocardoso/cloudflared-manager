@@ -73,6 +73,21 @@ describe('Watchdog.tick', () => {
     expect(e.backend.calls).not.toContain(`restart ${ID}`);
     expect(e.events.list({ tunnelId: ID }).map((x) => x.type)).toEqual(['no-connectivity']);
   });
+  it('does not undo a manual reset that happens during a tick', async () => {
+    const e = await setup();
+    e.tunnels.update(ID, { watchdogState: 'restarting', restartAttempts: 2, degradedSince: 0, nextRestartAt: 0 });
+    // The user clicks Restart while the watchdog is probing this tunnel.
+    const wd = new Watchdog({
+      tunnels: e.tunnels, backend: e.backend, events: e.events, probeInternet: async () => true, now: () => 1_000,
+      probeReady: async () => {
+        e.tunnels.update(ID, { watchdogState: 'healthy', restartAttempts: 0, degradedSince: null, nextRestartAt: null });
+        return false;
+      },
+    });
+    await wd.tick();
+    expect(e.backend.calls).not.toContain(`restart ${ID}`);
+    expect(e.tunnels.get(ID)).toMatchObject({ watchdogState: 'degraded', restartAttempts: 0 });
+  });
   it('prunes events older than 30 days', async () => {
     const e = await setup();
     e.events.add(ID, 'started', 'old');

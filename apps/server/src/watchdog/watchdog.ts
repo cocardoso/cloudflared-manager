@@ -43,9 +43,12 @@ export class Watchdog {
           // 'inactive' means stopped on purpose; 'failed' means systemd gave up and is ours to handle.
           if (st.state === 'inactive') continue;
           const healthy = st.state === 'active' && (await this.d.probeReady(row.metricsPort));
+          // Re-read after the awaits: a manual start/restart may have reset the state meanwhile.
+          const cur = this.d.tunnels.get(row.id);
+          if (!cur || !cur.keepAlive) continue;
           const { next, actions } = step(
-            { state: row.watchdogState, degradedSince: row.degradedSince, restartAttempts: row.restartAttempts, nextRestartAt: row.nextRestartAt },
-            { now: this.now(), healthy, internet, toleranceMs: row.toleranceMinutes * 60_000 },
+            { state: cur.watchdogState, degradedSince: cur.degradedSince, restartAttempts: cur.restartAttempts, nextRestartAt: cur.nextRestartAt },
+            { now: this.now(), healthy, internet, toleranceMs: cur.toleranceMinutes * 60_000 },
           );
           this.d.tunnels.update(row.id, {
             watchdogState: next.state, degradedSince: next.degradedSince, restartAttempts: next.restartAttempts, nextRestartAt: next.nextRestartAt,

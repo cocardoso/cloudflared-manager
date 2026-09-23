@@ -14,12 +14,14 @@ export const backoff = (attempt: number) => Math.min(BASE_BACKOFF_MS * 2 ** (att
 
 /** Pure keep-alive policy: one call per watchdog tick and tunnel. */
 export function step(s: WdState, i: WdInput): { next: WdState; actions: WdAction[] } {
-  // 'failing' only ends through a manual start/restart, which resets the stored state.
-  if (s.state === 'failing' || s.state === 'disabled') return { next: s, actions: [] };
+  if (s.state === 'disabled') return { next: s, actions: [] };
 
   if (i.healthy) {
     return s.state === 'healthy' ? { next: s, actions: [] } : { next: { ...HEALTHY }, actions: ['event-recovered'] };
   }
+
+  // After giving up, never restart again on our own; a recovery or a manual start clears it.
+  if (s.state === 'failing') return { next: s, actions: [] };
 
   // Restarting cannot fix a missing uplink: wait, and count tolerance from when connectivity returns.
   if (!i.internet) {

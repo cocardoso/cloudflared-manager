@@ -34,10 +34,10 @@ describe('watchdog state machine', () => {
     expect(restarts.length).toBe(MAX_RESTARTS - 1);
     expect(restarts[1]! - restarts[0]!).toBe(2 * BASE_BACKOFF_MS);
   });
-  it('failing is sticky', () => {
+  it('failing stops restarting but recovers when the tunnel comes back by itself', () => {
     const s: WdState = { state: 'failing', degradedSince: 0, restartAttempts: 5, nextRestartAt: null };
     expect(run(s, 1e9, false)).toEqual({ next: s, actions: [] });
-    expect(run(s, 1e9, true)).toEqual({ next: s, actions: [] });
+    expect(run(s, 1e9, true)).toEqual({ next: init, actions: ['event-recovered'] });
   });
   it('recovers and resets', () => {
     const s: WdState = { state: 'restarting', degradedSince: 0, restartAttempts: 3, nextRestartAt: 5 };
