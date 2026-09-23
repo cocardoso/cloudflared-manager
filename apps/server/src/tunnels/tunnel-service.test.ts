@@ -93,6 +93,21 @@ describe('updateRoutes', () => {
     const rec = env.cf.state.dns.get(zone1())!.find((r) => r.name === 'ha.example.com')!;
     expect(rec).toMatchObject({ type: 'CNAME', content: `${t.id}.cfargotunnel.com` });
   });
+  it('saves a hostname with the minimum of Cloudflare calls and no re-read afterwards', async () => {
+    const t = await env.service.create('home');
+    await env.accounts.list();
+    env.cf.state.requests.length = 0;
+    const d = await env.service.updateRoutes(t.id, upd(0, [route('ha.example.com')]));
+    expect(d).toMatchObject({ configVersion: 1, routeCount: 1, routes: [{ hostname: 'ha.example.com' }], account: { name: 'Home Lab' } });
+    const calls = env.cf.state.requests.map((r) => r.replace(t.id, ':id').replace(zone1(), ':zone'));
+    expect(calls.sort()).toEqual([
+      'GET /accounts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/cfd_tunnel/:id',
+      'GET /accounts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/cfd_tunnel/:id/configurations',
+      'GET /zones/:zone/dns_records',
+      'POST /zones/:zone/dns_records',
+      'PUT /accounts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/cfd_tunnel/:id/configurations',
+    ].sort());
+  });
   it('reuses CNAME already pointing to this tunnel', async () => {
     const t = await env.service.create('home');
     env.cf.state.dns.get(zone1())!.push({ id: 'r9', name: 'ha.example.com', type: 'CNAME', content: `${t.id}.cfargotunnel.com`, proxied: true });

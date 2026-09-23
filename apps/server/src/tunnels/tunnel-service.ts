@@ -312,9 +312,9 @@ export class TunnelService {
   async updateRoutes(id: string, input: RoutesUpdate): Promise<TunnelDetail> {
     const account = await this.accountOf(id);
     const api = this.d.api(account.id);
-    const t = await api.getTunnel(id);
+    // Independent reads run together: every Cloudflare round trip adds up while the user waits.
+    const [t, before] = await Promise.all([api.getTunnel(id), api.getConfig(id)]);
     if (t.config_src !== 'cloudflare') throw new AppError('TUNNEL_NOT_REMOTE', 'Tunnel uses local configuration', 400);
-    const before = await api.getConfig(id);
     if (before.version !== input.version) {
       throw new AppError('CONFIG_VERSION_CONFLICT', 'Configuration changed elsewhere', 409, { currentVersion: before.version });
     }
@@ -346,10 +346,11 @@ export class TunnelService {
     type Plan = { hostname: string; zoneId: string; action: 'create' | 'reuse' | 'overwrite'; recordId?: string };
     const plans: Plan[] = [];
     const conflicts: string[] = [];
-    for (const hostname of added) {
+    const lookups = await Promise.all(added.map((hostname) => api.findDnsRecords(zoneOf.get(hostname)!.id, hostname)));
+    for (const [i, hostname] of added.entries()) {
       const zoneId = zoneOf.get(hostname)!.id;
       // Only address records can clash with the CNAME; others (TXT, MX…) are never touched.
-      const existing = (await api.findDnsRecords(zoneId, hostname)).filter((r) => ADDRESS_TYPES.has(r.type));
+      const existing = lookups[i]!.filter((r) => ADDRESS_TYPES.has(r.type));
       const rec = existing[0];
       if (!rec) plans.push({ hostname, zoneId, action: 'create' });
       else if (rec.type === 'CNAME' && rec.content === target) plans.push({ hostname, zoneId, action: 'reuse', recordId: rec.id });
@@ -358,21 +359,27 @@ export class TunnelService {
     }
     if (conflicts.length) throw new AppError('DNS_CONFLICT', 'DNS record already exists for hostname', 409, { hostnames: conflicts });
 
-    await api.putConfig(id, routesToConfig(input.routes, before.config));
+    const config = routesToConfig(input.routes, before.config);
+    const { version } = await api.putConfig(id, config);
 
     const created: { zoneId: string; recordId: string }[] = [];
     const owned: ManagedDns[] = [];
+    const own = (p: Plan, recordId: string) => owned.push({ recordId, zoneId: p.zoneId, hostname: p.hostname, tunnelId: id });
     try {
-      // Creates first: they can be undone; overwrites cannot.
-      for (const p of [...plans].sort((a, b) => Number(a.action === 'overwrite') - Number(b.action === 'overwrite'))) {
-        let recordId = p.recordId!;
-        if (p.action === 'create') {
-          recordId = (await api.createCname(p.zoneId, p.hostname, target)).id;
-          created.push({ zoneId: p.zoneId, recordId });
-        } else if (p.action === 'overwrite') {
-          await api.updateCname(p.zoneId, recordId, p.hostname, target);
-        }
-        owned.push({ recordId, zoneId: p.zoneId, hostname: p.hostname, tunnelId: id });
+      for (const p of plans) if (p.action === 'reuse') own(p, p.recordId!);
+      // Creates first, together: they can be undone; overwrites cannot.
+      const creates = plans.filter((p) => p.action === 'create');
+      const results = await Promise.allSettled(creates.map((p) => api.createCname(p.zoneId, p.hostname, target)));
+      results.forEach((r, i) => {
+        if (r.status !== 'fulfilled') return;
+        created.push({ zoneId: creates[i]!.zoneId, recordId: r.value.id });
+        own(creates[i]!, r.value.id);
+      });
+      const failed = results.find((r) => r.status === 'rejected');
+      if (failed) throw (failed as PromiseRejectedResult).reason;
+      for (const p of plans.filter((x) => x.action === 'overwrite')) {
+        await api.updateCname(p.zoneId, p.recordId!, p.hostname, target);
+        own(p, p.recordId!);
       }
     } catch (e) {
       await api.putConfig(id, before.config).catch(() => undefined);
@@ -404,6 +411,8 @@ export class TunnelService {
       'config-changed',
       `Routes updated (+${added.length} / -${removed.length})${failures.length ? `; failed to remove DNS for ${failures.join(', ')}` : ''}`,
     );
-    return this.get(id);
+    // Everything the answer needs is known already; reading it back from Cloudflare only adds waiting.
+    const routes = configToRoutes(config);
+    return { ...(await this.summarize(t, this.d.tunnels.get(id), routes.length, ref(account))), routes, configVersion: version };
   }
 }
