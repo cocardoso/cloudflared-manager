@@ -77,7 +77,8 @@
     "SETUP_ALREADY_DONE": "A configuração inicial já foi feita.",
     "INVALID_CREDENTIALS": "Usuário ou senha incorretos.",
     "RATE_LIMITED": "Muitas tentativas. Aguarde um minuto.",
-    "INTERNAL": "Erro inesperado."
+    "INTERNAL": "Erro inesperado.",
+    "DNS_RECORD_NOT_FOUND": "O registro DNS não existe mais."
   },
   "setup": {
     "title": "Boas-vindas",

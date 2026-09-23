@@ -77,7 +77,8 @@
     "SETUP_ALREADY_DONE": "Setup was already completed.",
     "INVALID_CREDENTIALS": "Wrong username or password.",
     "RATE_LIMITED": "Too many attempts. Wait a minute.",
-    "INTERNAL": "Unexpected error."
+    "INTERNAL": "Unexpected error.",
+    "DNS_RECORD_NOT_FOUND": "The DNS record no longer exists."
   },
   "setup": {
     "title": "Welcome",

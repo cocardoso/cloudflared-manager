@@ -123,6 +123,33 @@ describe('updateRoutes', () => {
   });
 });
 
+describe('DNS safety', () => {
+  it('keeps tracking a CNAME whose deletion failed with a server error', async () => {
+    const t = await env.service.create('home');
+    const d = await env.service.updateRoutes(t.id, upd(0, [route('ha.example.com')]));
+    env.cf.state.failNext(/dns_records\/[^/]+$/, 500, [{ code: 1000, message: 'boom' }], 'DELETE');
+    await env.service.updateRoutes(t.id, upd(d.configVersion, []));
+    expect(env.dns.byTunnel(t.id)).toHaveLength(1);
+    expect(env.events.list({ tunnelId: t.id })[0]!.message).toContain('failed to remove DNS for ha.example.com');
+  });
+  it('aborts tunnel deletion when a CNAME cannot be removed, so it can be retried', async () => {
+    const t = await env.service.create('home');
+    await env.service.updateRoutes(t.id, upd(0, [route('ha.example.com')]));
+    env.cf.state.failNext(/dns_records\/[^/]+$/, 500, [{ code: 1000, message: 'boom' }], 'DELETE');
+    await expect(env.service.delete(t.id)).rejects.toMatchObject({ code: 'CF_API_ERROR' });
+    expect(env.cf.state.tunnels.get(t.id)!.tunnel.deleted_at).toBeNull();
+    expect(env.dns.byTunnel(t.id)).toHaveLength(1);
+    await env.service.delete(t.id);
+    expect(env.cf.state.dns.get(zone1())).toHaveLength(0);
+  });
+  it('never overwrites non-address records such as TXT', async () => {
+    const t = await env.service.create('home');
+    env.cf.state.dns.get(zone1())!.push({ id: 'txt1', name: 'ha.example.com', type: 'TXT', content: 'verify=123', proxied: false });
+    await env.service.updateRoutes(t.id, upd(0, [route('ha.example.com')], { overwriteDns: ['ha.example.com'] })).catch(() => undefined);
+    expect(env.cf.state.dns.get(zone1())!.find((r) => r.id === 'txt1')).toMatchObject({ type: 'TXT', content: 'verify=123' });
+  });
+});
+
 describe('delete', () => {
   it('removes unit, managed DNS and remote tunnel even with active connections', async () => {
     const t = await env.service.create('home');

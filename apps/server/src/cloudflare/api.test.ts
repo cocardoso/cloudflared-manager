@@ -57,6 +57,9 @@ describe('CfApi', () => {
     const paged = new CfApi(new CfClient({ token: 't', baseUrl: 'http://x', fetch: f }), 'acc');
     expect((await paged.listZones()).map((z) => z.name)).toEqual(['a.com', 'b.com']);
   });
+  it('maps a missing DNS record to DNS_RECORD_NOT_FOUND', async () => {
+    await expect(api.deleteDnsRecord(cf.state.zones[0]!.id, 'nope')).rejects.toMatchObject({ code: 'DNS_RECORD_NOT_FOUND', status: 404 });
+  });
   it('creates, finds and deletes CNAME', async () => {
     const z = cf.state.zones[0]!.id;
     const rec = await api.createCname(z, 'app.example.com', 'x.cfargotunnel.com');

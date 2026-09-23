@@ -36,6 +36,7 @@ export class CfClient {
     if (res.status === 403) throw new AppError('CF_PERMISSION_MISSING', msg, 403, env.errors);
     if (res.status === 429) throw new AppError('CF_RATE_LIMITED', msg, 429, env.errors);
     if (res.status === 404 && path.includes('/cfd_tunnel/')) throw new AppError('TUNNEL_NOT_FOUND', msg, 404, env.errors);
+    if (res.status === 404 && path.includes('/dns_records/')) throw new AppError('DNS_RECORD_NOT_FOUND', msg, 404, env.errors);
     throw new AppError('CF_API_ERROR', msg, 502, env.errors);
   }
 

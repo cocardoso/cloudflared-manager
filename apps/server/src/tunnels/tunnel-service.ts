@@ -16,6 +16,8 @@ const ignore = (...codes: string[]) => (e: unknown) => {
   throw e;
 };
 
+const ADDRESS_TYPES = new Set(['A', 'AAAA', 'CNAME']);
+
 const WATCHDOG_RESET = { watchdogState: 'healthy', restartAttempts: 0, degradedSince: null, nextRestartAt: null } as const;
 
 /** Orchestrates Cloudflare (source of truth for tunnels, routes and DNS) with the local service backend. */
@@ -161,7 +163,8 @@ export class TunnelService {
     await api.cleanupConnections(id).catch(ignore('TUNNEL_NOT_FOUND', 'CF_API_ERROR'));
     const zones = new Set((await api.listZones()).map((z) => z.id));
     for (const m of this.d.dns.byTunnel(id)) {
-      if (zones.has(m.zoneId)) await api.deleteDnsRecord(m.zoneId, m.recordId).catch(ignore('CF_API_ERROR'));
+      // Any failure other than "already gone" aborts, leaving the tunnel in place so the delete can be retried.
+      if (zones.has(m.zoneId)) await api.deleteDnsRecord(m.zoneId, m.recordId).catch(ignore('DNS_RECORD_NOT_FOUND'));
       this.d.dns.delete(m.recordId);
     }
     await api.deleteTunnel(id).catch(ignore('TUNNEL_NOT_FOUND'));
@@ -201,7 +204,8 @@ export class TunnelService {
     const conflicts: string[] = [];
     for (const hostname of added) {
       const zoneId = zoneOf.get(hostname)!.id;
-      const existing = await api.findDnsRecords(zoneId, hostname);
+      // Only address records can clash with the CNAME; others (TXT, MX…) are never touched.
+      const existing = (await api.findDnsRecords(zoneId, hostname)).filter((r) => ADDRESS_TYPES.has(r.type));
       const rec = existing[0];
       if (!rec) plans.push({ hostname, zoneId, action: 'create' });
       else if (rec.type === 'CNAME' && rec.content === target) plans.push({ hostname, zoneId, action: 'reuse', recordId: rec.id });
@@ -241,8 +245,8 @@ export class TunnelService {
       try {
         await api.deleteDnsRecord(m.zoneId, m.recordId);
       } catch (e) {
-        // A missing record (CF_API_ERROR 404) is already the desired state.
-        if (!(e instanceof AppError && e.code === 'CF_API_ERROR')) {
+        // A missing record is already the desired state; anything else keeps it tracked for a later retry.
+        if (!(e instanceof AppError && e.code === 'DNS_RECORD_NOT_FOUND')) {
           failures.push(hostname);
           continue;
         }
