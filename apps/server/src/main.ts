@@ -1,6 +1,7 @@
 import { loadConfig } from './config';
 import { buildApp } from './http/app';
 import { createContext } from './http/context';
+import { ProcessBackend } from './services/process-backend';
 import { probeInternet, probeReady } from './watchdog/probes';
 import { Watchdog } from './watchdog/watchdog';
 
@@ -14,9 +15,13 @@ const metricsTimer = setInterval(() => {
   for (const t of ctx.tunnels.list()) void ctx.sampler.sample(t.id, t.metricsPort);
 }, 60_000);
 
+const supervisor = ctx.backend instanceof ProcessBackend ? ctx.backend : null;
+
 const shutdown = async () => {
   watchdog.stop();
   clearInterval(metricsTimer);
+  // Children stop without being marked as stopped, so they return on the next boot.
+  await supervisor?.shutdownAll();
   await app.close();
   ctx.db.close();
   process.exit(0);
@@ -25,4 +30,5 @@ process.on('SIGTERM', () => void shutdown());
 process.on('SIGINT', () => void shutdown());
 
 await app.listen({ port: config.port, host: config.host });
+await supervisor?.startAll();
 console.log(`cloudflared-manager listening on http://${config.host}:${config.port} (backend=${config.serviceBackend})`);
