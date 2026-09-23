@@ -13,7 +13,7 @@ A [community-scripts](https://community-scripts.org/scripts/cloudflared)-style s
 In the Proxmox **host** shell:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/cocardoso/cloudflared-proxmox/main/ct/cloudflared-manager.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/cocardoso/cloudflared-manager/main/ct/cloudflared-manager.sh)"
 ```
 
 Container defaults (adjustable in the installer menus): Debian 13, 1 vCPU, 1 GB RAM, 4 GB disk, unprivileged, x86-64 and ARM64.
@@ -67,7 +67,7 @@ To use the real API, omit `CF_API_BASE`. The `SERVICE_BACKEND=fake` backend (the
 
 ### Publishing
 
-1. `bash scripts/set-repo.sh <owner>/<repo>` and commit (already done for `cocardoso/cloudflared-proxmox`).
+1. `bash scripts/set-repo.sh <owner>/<repo>` and commit (already done for `cocardoso/cloudflared-manager`).
 2. `git tag v0.1.0 && git push --tags`: the `release` workflow builds the tarball and creates the GitHub Release the installer downloads.
 
 ## Layout

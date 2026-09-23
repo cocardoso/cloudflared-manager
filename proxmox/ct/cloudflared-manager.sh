@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 cesar
 # License: MIT
-# Source: https://github.com/cocardoso/cloudflared-proxmox
+# Source: https://github.com/cocardoso/cloudflared-manager
 
-GH_REPO="${TM_GH_REPO:-cocardoso/cloudflared-proxmox}"
+GH_REPO="${TM_GH_REPO:-cocardoso/cloudflared-manager}"
 # The community-scripts engine is pinned so upstream changes cannot break this script.
 CORE_COMMIT="${TM_CORE_COMMIT:-34c3105f51f7d24505a7b4801babbf2aa7bca407}"
 # The engine resolves install/<app>-install.sh relative to this URL, i.e. proxmox/install/.
