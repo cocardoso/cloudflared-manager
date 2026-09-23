@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../i18n';
@@ -68,6 +68,20 @@ describe('SettingsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save accounts' }));
     expect(await screen.findByText('Accounts saved')).toBeTruthy();
     await waitFor(() => expect(screen.getByRole('checkbox', { name: /Second Org/ }).getAttribute('aria-checked')).toBe('true'));
+  });
+  it('shows progress while a backup is imported', async () => {
+    mockApi({ ...routes, 'POST /api/backup': () => new Promise<Response>(() => {}) });
+    const { container } = renderWithProviders(<SettingsPage />);
+    const input = await waitFor(() => container.querySelector('input[type="file"]') as HTMLInputElement);
+    await userEvent.upload(input, new File([JSON.stringify({ version: 1, tunnels: [], managedDns: [] })], 'b.json', { type: 'application/json' }));
+    await waitFor(() => expect(within(screen.getByRole('button', { name: /Import/ })).getByRole('status')).toBeTruthy());
+  });
+  it('shows progress while a backup is exported', async () => {
+    mockApi({ ...routes, 'GET /api/backup': () => new Promise<Response>(() => {}) });
+    renderWithProviders(<SettingsPage />);
+    const exp = await screen.findByRole('button', { name: /Export/ });
+    await userEvent.click(exp);
+    await waitFor(() => expect(within(exp).getByRole('status')).toBeTruthy());
   });
   it('updates cloudflared', async () => {
     const calls = mockApi(routes);

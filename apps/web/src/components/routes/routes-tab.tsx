@@ -13,7 +13,7 @@ type Pending = { routes: Route[]; keepDns?: string[] };
 /** What a dialog was opened on; saves are built from it so a background refresh cannot shift indexes. */
 type Snapshot = { version: number; routes: Route[] };
 
-export function RoutesTab({ tunnel, onReload }: { tunnel: TunnelDetail; onReload?: () => void }) {
+export function RoutesTab({ tunnel, onReload, reloading = false }: { tunnel: TunnelDetail; onReload?: () => void; reloading?: boolean }) {
   const { t } = useTranslation();
   // A tunnel only serves hostnames of zones in its own account.
   const zones = useCloudflareStatus().data?.accounts.find((a) => a.id === tunnel.account.id)?.zones ?? [];
@@ -28,6 +28,12 @@ export function RoutesTab({ tunnel, onReload }: { tunnel: TunnelDetail; onReload
   const [removing, setRemoving] = useState<number | null>(null);
   const [removeDns, setRemoveDns] = useState(true);
   const [error, setError] = useState<unknown>(null);
+  /** Which move button started the save in progress, so only that one spins. */
+  const [moving, setMoving] = useState<string | null>(null);
+  const move = (i: number, by: -1 | 1) => {
+    setMoving(`${i}:${by}`);
+    void persist(current(), { routes: moveRoute(tunnel.routes, i, by) }).finally(() => setMoving(null));
+  };
   const [snapshot, setSnapshot] = useState<Snapshot>({ version: tunnel.configVersion, routes: tunnel.routes });
   const current = (): Snapshot => ({ version: tunnel.configVersion, routes: tunnel.routes });
   const openWith = (open: () => void) => {
@@ -82,7 +88,7 @@ export function RoutesTab({ tunnel, onReload }: { tunnel: TunnelDetail; onReload
         <Banner
           variant="alert"
           description={t('errors.CONFIG_VERSION_CONFLICT')}
-          action={<Banner.Action onClick={() => { setError(null); onReload?.(); }}>{t('routes.reload')}</Banner.Action>}
+          action={<Banner.Action loading={reloading} onClick={() => { setError(null); onReload?.(); }}>{t('routes.reload')}</Banner.Action>}
         />
       ) : (
         <ErrorBanner error={error} />
@@ -128,9 +134,9 @@ export function RoutesTab({ tunnel, onReload }: { tunnel: TunnelDetail; onReload
                     <Table.Cell>
                       <div className="flex justify-end gap-1">
                         <Button size="sm" variant="ghost" shape="square" icon={<ArrowUpIcon />} aria-label={t('routes.moveUp')}
-                          disabled={i === 0 || save.isPending} onClick={() => void persist(current(), { routes: moveRoute(tunnel.routes, i, -1) })} />
+                          loading={moving === `${i}:-1`} disabled={i === 0 || save.isPending} onClick={() => move(i, -1)} />
                         <Button size="sm" variant="ghost" shape="square" icon={<ArrowDownIcon />} aria-label={t('routes.moveDown')}
-                          disabled={i === tunnel.routes.length - 1 || save.isPending} onClick={() => void persist(current(), { routes: moveRoute(tunnel.routes, i, 1) })} />
+                          loading={moving === `${i}:1`} disabled={i === tunnel.routes.length - 1 || save.isPending} onClick={() => move(i, 1)} />
                         <Button size="sm" variant="ghost" shape="square" icon={<PencilSimpleIcon />} aria-label={t('common.edit')}
                           onClick={() => openWith(() => { setEditing(i); setFormOpen(true); })} />
                         <Button size="sm" variant="ghost" shape="square" icon={<TrashIcon />} aria-label={t('routes.removeTitle', { hostname: r.hostname })}

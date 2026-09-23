@@ -62,6 +62,7 @@ export function AppShell() {
                 shape="square"
                 icon={<SignOutIcon />}
                 aria-label={t('nav.logout')}
+                loading={logout.isPending}
                 onClick={async () => {
                   await logout.mutateAsync();
                   nav('/login');

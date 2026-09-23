@@ -168,7 +168,8 @@ function BackupSection() {
   const file = useRef<HTMLInputElement>(null);
 
   const exportBackup = async () => {
-    const data = await api.get<unknown>('/backup');
+    setExporting(true);
+    const data = await api.get<unknown>('/backup').finally(() => setExporting(false));
     const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
     const a = document.createElement('a');
     a.href = url;
@@ -177,13 +178,19 @@ function BackupSection() {
     URL.revokeObjectURL(url);
   };
 
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
   const importBackup = async (f: File) => {
+    setImporting(true);
     try {
       await api.post('/backup', JSON.parse(await f.text()));
       await qc.invalidateQueries();
       toasts.add({ title: t('settings.imported') });
     } catch (e) {
       toasts.add({ title: msg(e), type: 'error' });
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -191,8 +198,8 @@ function BackupSection() {
     <Section title={t('settings.backup')}>
       <Text variant="secondary">{t('settings.backupHint')}</Text>
       <div className="flex flex-wrap gap-2">
-        <Button icon={<DownloadSimpleIcon />} onClick={() => void exportBackup()}>{t('settings.export')}</Button>
-        <Button icon={<UploadSimpleIcon />} onClick={() => file.current?.click()}>{t('settings.import')}</Button>
+        <Button icon={<DownloadSimpleIcon />} loading={exporting} onClick={() => void exportBackup()}>{t('settings.export')}</Button>
+        <Button icon={<UploadSimpleIcon />} loading={importing} onClick={() => file.current?.click()}>{t('settings.import')}</Button>
         <input
           ref={file}
           type="file"
