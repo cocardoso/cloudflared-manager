@@ -22,6 +22,21 @@ var_version="${var_version:-13}"
 var_arm64="${var_arm64:-yes}"
 var_unprivileged="${var_unprivileged:-1}"
 
+# The engine looks for the ASCII banner in its own repository (404 for apps outside
+# community-scripts) unless a cached copy exists, so ship ours in its cache.
+_cm_header="$(declare -f community_scripts_dir >/dev/null 2>&1 && community_scripts_dir || echo /usr/local/community-scripts)/headers/ct/cloudflared-manager"
+if [[ ! -s "$_cm_header" ]] && mkdir -p "$(dirname "$_cm_header")" 2>/dev/null; then
+  cat >"$_cm_header" <<'BANNER' || true
+   ________                ______                   __
+  / ____/ /___  __  ______/ / __/___ _________  ___/ /
+ / /   / / __ \/ / / / __  / /_/ __ `/ ___/ _ \/ __  /
+/ /___/ / /_/ / /_/ / /_/ / __/ /_/ / /  /  __/ /_/ /
+\____/_/\____/\__,_/\__,_/_/  \__,_/_/   \___/\__,_/
+                                         MANAGER
+BANNER
+fi
+unset _cm_header
+
 header_info "$APP"
 variables
 color
