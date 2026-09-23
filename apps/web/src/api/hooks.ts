@@ -72,8 +72,11 @@ export function useErrorMessage() {
   const { t } = useTranslation();
   return (e: unknown) => {
     if (e instanceof ApiError) {
-      const permission = (e.details as { permission?: string } | undefined)?.permission;
-      return t(`errors.${e.code}`, { permission, defaultValue: e.message });
+      const d = (e.details ?? {}) as { permission?: string; accountName?: string; cloudflare?: { code: number; message: string }[] };
+      const key = e.code === 'CF_PERMISSION_MISSING' && d.accountName ? 'errors.CF_PERMISSION_MISSING_ACCOUNT' : `errors.${e.code}`;
+      const text = t(key, { permission: d.permission, account: d.accountName, defaultValue: e.message });
+      const cf = Array.isArray(d.cloudflare) ? d.cloudflare.map((x) => `${x.code} ${x.message}`).join('; ') : '';
+      return cf ? `${text} ${t('errors.cloudflareSaid', { detail: cf })}` : text;
     }
     return t('errors.INTERNAL');
   };

@@ -7,8 +7,9 @@ import type { AppContext } from '../context';
 const TUNNEL_PERMISSION = 'Account: Cloudflare Tunnel: Edit';
 const ZONE_PERMISSION = 'Zone: Zone: Read';
 
-const withPermission = (permission: string) => (e: unknown) => {
-  if (e instanceof AppError && e.code === 'CF_PERMISSION_MISSING') e.details = { permission };
+/** Names the permission that is missing while keeping Cloudflare's own error for diagnosis. */
+const withPermission = (permission: string, accountName?: string) => (e: unknown) => {
+  if (e instanceof AppError && e.code === 'CF_PERMISSION_MISSING') e.details = { permission, accountName, cloudflare: e.details };
   throw e;
 };
 
@@ -33,8 +34,8 @@ export async function cloudflareRoutes(app: FastifyInstance, ctx: AppContext) {
     const account = accountId ? accounts.find((a) => a.id === accountId) : accounts.length === 1 ? accounts[0] : undefined;
     if (!account) throw new AppError('ACCOUNT_SELECTION_REQUIRED', 'Choose an account', 409, { accounts });
     const api = new CfApi(client, account.id);
-    await api.listTunnels().catch(withPermission(TUNNEL_PERMISSION));
-    const zones = await api.listZones().catch(withPermission(ZONE_PERMISSION));
+    await api.listTunnels().catch(withPermission(TUNNEL_PERMISSION, account.name));
+    const zones = await api.listZones().catch(withPermission(ZONE_PERMISSION, account.name));
     if (!zones.length) throw new AppError('CF_PERMISSION_MISSING', 'Token cannot read any zone', 403, { permission: ZONE_PERMISSION });
     ctx.settings.setCloudflare({ token, accountId: account.id, accountName: account.name });
     return status();

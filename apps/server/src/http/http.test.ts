@@ -108,7 +108,10 @@ describe('cloudflare connection', () => {
     const h = await setupAdmin();
     cf.state.failNext(/cfd_tunnel$/, 403, [{ code: 10000, message: 'Authentication error' }]);
     const r = await app.inject({ method: 'POST', url: '/api/cloudflare/token', headers: h, payload: { token: cf.token } });
-    expect(r.json()).toMatchObject({ code: 'CF_PERMISSION_MISSING', details: { permission: 'Account: Cloudflare Tunnel: Edit' } });
+    expect(r.json()).toMatchObject({
+      code: 'CF_PERMISSION_MISSING',
+      details: { permission: 'Account: Cloudflare Tunnel: Edit', accountName: 'Home Lab', cloudflare: [{ code: 10000, message: 'Authentication error' }] },
+    });
   });
   it('returns CF_NOT_CONNECTED before token is set', async () => {
     const h = await setupAdmin();

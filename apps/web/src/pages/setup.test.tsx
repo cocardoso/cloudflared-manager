@@ -43,6 +43,23 @@ describe('SetupPage', () => {
     expect(link.getAttribute('target')).toBe('_blank');
   });
 
+  it('shows which account lacks the permission and what Cloudflare answered', async () => {
+    mockApi({
+      'GET /api/setup/status': () => json({ adminCreated: true, cloudflareConnected: false }),
+      'GET /api/auth/me': () => json({ username: 'admin' }),
+      'POST /api/cloudflare/token': () =>
+        json({
+          code: 'CF_PERMISSION_MISSING', message: 'x',
+          details: { permission: 'Account: Cloudflare Tunnel: Edit', accountName: 'AUTOMATIZA', cloudflare: [{ code: 10000, message: 'Authentication error' }] },
+        }, 403),
+    });
+    renderWithProviders(<SetupPage />);
+    await userEvent.type(await screen.findByLabelText('API token'), 'x'.repeat(40));
+    await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+    expect(await screen.findByText(/on account "AUTOMATIZA"/)).toBeTruthy();
+    expect(screen.getByText(/Cloudflare: 10000 Authentication error/)).toBeTruthy();
+  });
+
   it('asks to choose an account when the token has several', async () => {
     let connected = false;
     const calls = mockApi({

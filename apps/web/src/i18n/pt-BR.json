@@ -78,7 +78,9 @@
     "INVALID_CREDENTIALS": "Usuário ou senha incorretos.",
     "RATE_LIMITED": "Muitas tentativas. Aguarde um minuto.",
     "INTERNAL": "Erro inesperado.",
-    "DNS_RECORD_NOT_FOUND": "O registro DNS não existe mais."
+    "DNS_RECORD_NOT_FOUND": "O registro DNS não existe mais.",
+    "CF_PERMISSION_MISSING_ACCOUNT": "O token não consegue usar {{permission}} na conta \"{{account}}\". Escolha outra conta ou verifique se o seu papel nessa conta inclui Cloudflare Tunnel.",
+    "cloudflareSaid": "Cloudflare: {{detail}}"
   },
   "setup": {
     "title": "Boas-vindas",

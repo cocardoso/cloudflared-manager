@@ -78,7 +78,9 @@
     "INVALID_CREDENTIALS": "Wrong username or password.",
     "RATE_LIMITED": "Too many attempts. Wait a minute.",
     "INTERNAL": "Unexpected error.",
-    "DNS_RECORD_NOT_FOUND": "The DNS record no longer exists."
+    "DNS_RECORD_NOT_FOUND": "The DNS record no longer exists.",
+    "CF_PERMISSION_MISSING_ACCOUNT": "The token cannot use {{permission}} on account \"{{account}}\". Pick another account, or check that your role in that account includes Cloudflare Tunnel.",
+    "cloudflareSaid": "Cloudflare: {{detail}}"
   },
   "setup": {
     "title": "Welcome",
