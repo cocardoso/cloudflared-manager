@@ -11,15 +11,20 @@ beforeEach(async () => {
 });
 
 describe('SetupPage', () => {
-  it('blocks short passwords before calling the API', async () => {
-    const calls = mockApi({ 'GET /api/setup/status': () => json({ adminCreated: false, cloudflareConnected: false }) });
+  it('accepts a short password but shows its strength and the recommendation', async () => {
+    const calls = mockApi({
+      'GET /api/setup/status': () => json({ adminCreated: false, cloudflareConnected: false }),
+      'POST /api/setup/admin': () => json({ username: 'admin' }, 201),
+    });
     renderWithProviders(<SetupPage />);
+    expect(await screen.findByText(/Recommended: 12 or more characters/)).toBeTruthy();
     await userEvent.type(await screen.findByLabelText('Username'), 'admin');
     await userEvent.type(screen.getByLabelText('Password'), 'short');
+    expect(screen.getByRole('meter', { name: 'Password strength' })).toBeTruthy();
+    expect(screen.getByText('Weak')).toBeTruthy();
     await userEvent.type(screen.getByLabelText('Confirm password'), 'short');
     await userEvent.click(screen.getByRole('button', { name: 'Create admin' }));
-    expect(await screen.findByText('At least 12 characters')).toBeTruthy();
-    expect(calls.some((c) => c.key === 'POST /api/setup/admin')).toBe(false);
+    await waitFor(() => expect(calls.find((c) => c.key === 'POST /api/setup/admin')?.body).toMatchObject({ password: 'short' }));
   });
 
   it('blocks mismatched passwords', async () => {

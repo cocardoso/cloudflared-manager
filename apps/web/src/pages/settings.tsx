@@ -9,6 +9,7 @@ import { AccountsPicker } from '../components/accounts-picker';
 import { ConnectCloudflareForm } from '../components/connect-cloudflare-form';
 import { ErrorBanner } from '../components/error-banner';
 import { PageHeader } from '../components/page-header';
+import { PasswordStrengthMeter } from '../components/password-strength-meter';
 import { LANGUAGES, setLanguage } from '../i18n';
 import { applyTheme, getStoredTheme, type Theme } from '../lib/theme';
 
@@ -60,7 +61,7 @@ function PasswordSection() {
   const toasts = Toast.useToastManager();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
-  const valid = current.length > 0 && next.length >= 12;
+  const valid = current.length > 0 && next.length > 0;
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -81,13 +82,8 @@ function PasswordSection() {
     <Section title={t('settings.password')}>
       <form className="flex max-w-md flex-col gap-4" onSubmit={submit}>
         <SensitiveInput label={t('settings.currentPassword')} value={current} onValueChange={setCurrent} autoComplete="current-password" />
-        <SensitiveInput
-          label={t('settings.newPassword')}
-          description={t('setup.passwordHint')}
-          value={next}
-          onValueChange={setNext}
-          autoComplete="new-password"
-        />
+        <SensitiveInput label={t('settings.newPassword')} value={next} onValueChange={setNext} autoComplete="new-password" />
+        <PasswordStrengthMeter password={next} />
         <ErrorBanner error={change.error} />
         <div>
           <Button type="submit" variant="primary" disabled={!valid} loading={change.isPending}>{t('settings.changePassword')}</Button>

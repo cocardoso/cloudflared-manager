@@ -3,6 +3,7 @@ import { CheckIcon } from '@phosphor-icons/react';
 import { adminSetupSchema } from '@tm/shared';
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PasswordStrengthMeter } from '../components/password-strength-meter';
 import { Navigate, useNavigate } from 'react-router';
 import { useMe, useSetupAdmin, useSetupStatus } from '../api/hooks';
 import { AuthLayout } from '../components/auth-layout';
@@ -47,7 +48,7 @@ function AdminStep() {
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const next: typeof errors = {};
-    if (password.length < 12) next.password = t('setup.passwordHint');
+    if (!password) next.password = t('setup.passwordRequired');
     else if (password !== confirm) next.confirm = t('setup.passwordMismatch');
     setErrors(next);
     if (next.password || next.confirm) return;
@@ -60,12 +61,12 @@ function AdminStep() {
       <Input label={t('setup.username')} value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
       <SensitiveInput
         label={t('setup.password')}
-        description={errors.password ? undefined : t('setup.passwordHint')}
         error={errors.password}
         value={password}
         onValueChange={setPassword}
         autoComplete="new-password"
       />
+      <PasswordStrengthMeter password={password} />
       <SensitiveInput
         label={t('setup.confirmPassword')}
         error={errors.confirm}

@@ -59,7 +59,7 @@ Images are multi-arch (`linux/amd64`, `linux/arm64`) and tagged `latest`, `<majo
 
 ## First access
 
-1. **Create the admin** (password with at least 12 characters).
+1. **Create the admin**. Any password is accepted; a meter shows its strength and 12+ characters mixing letters, numbers and symbols are recommended.
 2. **Connect Cloudflare**: click **Create token in Cloudflare**. The dashboard opens with the permissions already filled in; confirm, copy the token and paste it. You only do this once. Permissions used:
    - Account → Cloudflare Tunnel → Edit
    - Zone → DNS → Edit

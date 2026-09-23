@@ -92,7 +92,6 @@
     "step2": "Connect Cloudflare",
     "username": "Username",
     "password": "Password",
-    "passwordHint": "At least 12 characters",
     "confirmPassword": "Confirm password",
     "passwordMismatch": "Passwords do not match",
     "createAdmin": "Create admin",
@@ -110,7 +109,8 @@
     "connectedAccounts_one": "Connected to {{count}} account",
     "connectedAccounts_other": "Connected to {{count}} accounts",
     "accountsSummary_one": "{{accounts}} · {{count}} domain",
-    "accountsSummary_other": "{{accounts}} · {{count}} domains"
+    "accountsSummary_other": "{{accounts}} · {{count}} domains",
+    "passwordRequired": "Enter a password"
   },
   "login": {
     "title": "Log in",
@@ -304,5 +304,13 @@
     "hint": "Choose the accounts this app works with. Tunnels are listed and created only in the checked accounts.",
     "save": "Save accounts",
     "saved": "Accounts saved"
+  },
+  "password": {
+    "strength": "Password strength",
+    "weak": "Weak",
+    "fair": "Fair",
+    "good": "Good",
+    "strong": "Strong",
+    "recommendation": "Recommended: 12 or more characters, mixing letters, numbers and symbols."
   }
 }
