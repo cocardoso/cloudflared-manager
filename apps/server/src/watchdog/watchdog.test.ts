@@ -41,6 +41,18 @@ describe('Watchdog.tick', () => {
     expect(e.tunnels.get(ID)!.watchdogState).toBe('restarting');
     expect(e.events.list({ tunnelId: ID }).map((x) => x.type)).toEqual(['watchdog-restart', 'watchdog-degraded']);
   });
+  it('gives a tunnel just started by the user time to connect', async () => {
+    const e = await setup();
+    e.set({ now: 1_000_000, ready: false });
+    e.tunnels.update(ID, { graceUntil: 1_060_000 });
+    await e.wd.tick();
+    expect(e.tunnels.get(ID)!.watchdogState).toBe('healthy');
+    expect(e.events.list({ tunnelId: ID })).toEqual([]);
+    // Still not ready once the grace period is over: the usual path applies.
+    e.set({ now: 1_060_001 });
+    await e.wd.tick();
+    expect(e.tunnels.get(ID)!.watchdogState).toBe('degraded');
+  });
   it('treats a failed unit as unhealthy', async () => {
     const e = await setup();
     e.backend.setState(ID, 'failed');

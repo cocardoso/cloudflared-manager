@@ -46,6 +46,8 @@ export class Watchdog {
           // Re-read after the awaits: a manual start/restart may have reset the state meanwhile.
           const cur = this.d.tunnels.get(row.id);
           if (!cur || !cur.keepAlive) continue;
+          // Just (re)started by the user: still connecting is expected, not a failure.
+          if (!healthy && cur.graceUntil && this.now() < cur.graceUntil) continue;
           const { next, actions } = step(
             { state: cur.watchdogState, degradedSince: cur.degradedSince, restartAttempts: cur.restartAttempts, nextRestartAt: cur.nextRestartAt },
             { now: this.now(), healthy, internet, toleranceMs: cur.toleranceMinutes * 60_000 },
