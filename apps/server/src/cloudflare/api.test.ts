@@ -60,6 +60,33 @@ describe('CfApi', () => {
   it('maps a missing DNS record to DNS_RECORD_NOT_FOUND', async () => {
     await expect(api.deleteDnsRecord(cf.state.zones[0]!.id, 'nope')).rejects.toMatchObject({ code: 'DNS_RECORD_NOT_FOUND', status: 404 });
   });
+  it('stops paginating when result_info has no total_pages (cfd_tunnel list)', async () => {
+    const all = Array.from({ length: 3 }, (_, i) => ({ id: String(i), name: `t${i}` }));
+    let calls = 0;
+    const f = (async (url: string) => {
+      if (++calls > 10) throw new Error('runaway pagination');
+      const u = new URL(url);
+      const page = Number(u.searchParams.get('page'));
+      const per = Number(u.searchParams.get('per_page'));
+      const result = all.slice((page - 1) * per, page * per);
+      return new Response(JSON.stringify({ success: true, errors: [], result, result_info: { page, per_page: per, count: result.length, total_count: all.length } }));
+    }) as unknown as typeof fetch;
+    const c = new CfClient({ token: 't', baseUrl: 'http://x', fetch: f });
+    expect((await c.paginate<{ id: string }>('/things?per_page=2')).map((x) => x.id)).toEqual(['0', '1', '2']);
+    expect(calls).toBe(2);
+  });
+  it('stops on an empty page even without any totals', async () => {
+    let calls = 0;
+    const f = (async (url: string) => {
+      if (++calls > 10) throw new Error('runaway pagination');
+      const page = Number(new URL(url).searchParams.get('page'));
+      const result = page === 1 ? [{ id: 'a' }] : [];
+      return new Response(JSON.stringify({ success: true, errors: [], result, result_info: { page, per_page: 50 } }));
+    }) as unknown as typeof fetch;
+    const c = new CfClient({ token: 't', baseUrl: 'http://x', fetch: f });
+    expect(await c.paginate('/things')).toEqual([{ id: 'a' }]);
+    expect(calls).toBeLessThanOrEqual(2);
+  });
   it('creates, finds and deletes CNAME', async () => {
     const z = cf.state.zones[0]!.id;
     const rec = await api.createCname(z, 'app.example.com', 'x.cfargotunnel.com');

@@ -2,6 +2,9 @@ import { AppError } from '../errors';
 import type { CfEnvelope } from './types';
 
 /** Thin fetch wrapper that unwraps Cloudflare's envelope and maps failures to AppError codes. */
+/** Hard stop against endpoints whose pagination metadata never signals the end. */
+const MAX_PAGES = 100;
+
 export class CfClient {
   private fetchImpl: typeof fetch;
 
@@ -47,10 +50,20 @@ export class CfClient {
   async paginate<T>(path: string): Promise<T[]> {
     const out: T[] = [];
     const sep = path.includes('?') ? '&' : '?';
-    for (let page = 1; ; page++) {
+    for (let page = 1; page <= MAX_PAGES; page++) {
       const env = await this.raw<T[]>('GET', `${path}${sep}page=${page}`);
-      out.push(...env.result);
-      if (!env.result_info || page >= env.result_info.total_pages) return out;
+      const items = env.result ?? [];
+      out.push(...items);
+      const info = env.result_info;
+      if (!info || items.length === 0) return out;
+      if (info.total_pages !== undefined) {
+        if (page >= info.total_pages) return out;
+      } else if (info.total_count !== undefined) {
+        if (out.length >= info.total_count) return out;
+      } else if (info.per_page !== undefined && items.length < info.per_page) {
+        return out;
+      }
     }
+    return out;
   }
 }

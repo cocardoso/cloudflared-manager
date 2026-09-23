@@ -109,7 +109,6 @@ export function SettingsTab({ tunnel }: { tunnel: TunnelDetail }) {
               <Select
                 className="w-full"
                 label={t('tunnel.logLevel')}
-                hideLabel={false}
                 value={logLevel}
                 onValueChange={(v) => setLogLevel(v as LogLevel)}
                 items={{ debug: 'debug', info: 'info', warn: 'warn', error: 'error', fatal: 'fatal' }}
@@ -117,7 +116,6 @@ export function SettingsTab({ tunnel }: { tunnel: TunnelDetail }) {
               <Select
                 className="w-full"
                 label={t('tunnel.protocol')}
-                hideLabel={false}
                 value={protocol}
                 onValueChange={(v) => setProtocol(v as Protocol)}
                 items={{ auto: 'auto', quic: 'QUIC', http2: 'HTTP/2' }}

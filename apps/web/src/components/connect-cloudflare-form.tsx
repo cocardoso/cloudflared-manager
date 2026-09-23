@@ -66,7 +66,6 @@ export function ConnectCloudflareForm({ onConnected }: { onConnected?: (s: Cloud
         <Select
           className="w-full"
           label={t('setup.chooseAccount')}
-          hideLabel={false}
           value={accountId}
           onValueChange={(v) => setAccountId(String(v))}
           items={Object.fromEntries(accounts.map((a) => [a.id, a.name]))}

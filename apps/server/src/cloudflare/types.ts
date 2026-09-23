@@ -14,5 +14,6 @@ export interface CfTunnelConfig {
 export interface CfDnsRecord { id: string; name: string; type: string; content: string; proxied: boolean; comment?: string | null }
 export interface CfEnvelope<T> {
   success: boolean; result: T; errors: { code: number; message: string }[];
-  result_info?: { page: number; per_page: number; total_pages: number; count: number };
+  // Endpoints differ: some send total_pages, others only total_count (e.g. cfd_tunnel), some neither.
+  result_info?: { page?: number; per_page?: number; total_pages?: number; count?: number; total_count?: number };
 }

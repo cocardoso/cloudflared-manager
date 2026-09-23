@@ -64,7 +64,6 @@ export function RouteFormDialog({ open, onOpenChange, zones, initial, saving, on
             <Select
               className="w-full"
               label={t('routes.domain')}
-              hideLabel={false}
               value={v.zone}
               onValueChange={(x) => set('zone', String(x))}
               items={Object.fromEntries(zones.map((z) => [z.name, z.name]))}
@@ -87,7 +86,6 @@ export function RouteFormDialog({ open, onOpenChange, zones, initial, saving, on
             <Select
               className="w-full"
               label={t('routes.type')}
-              hideLabel={false}
               value={v.type}
               onValueChange={(x) => set('type', x as RouteFormValues['type'])}
               items={Object.fromEntries(SERVICE_TYPES.map((s) => [s, TYPE_LABELS[s]]))}

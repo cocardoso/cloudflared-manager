@@ -112,7 +112,6 @@ function AppearanceSection() {
         <Select
           className="w-full"
           label={t('nav.language')}
-          hideLabel={false}
           value={i18n.resolvedLanguage ?? 'en'}
           onValueChange={(v) => void setLanguage(String(v))}
           items={Object.fromEntries(LANGUAGES.map((l) => [l.value, l.label]))}
@@ -120,7 +119,6 @@ function AppearanceSection() {
         <Select
           className="w-full"
           label={t('settings.theme')}
-          hideLabel={false}
           value={theme}
           onValueChange={(v) => {
             setTheme(v as Theme);
