@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+release
+.git
+.github
+.superpowers
+.e2e-data
+.data
+test-results
+playwright-report
+docs
+e2e
+*.log
