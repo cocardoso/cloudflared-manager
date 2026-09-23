@@ -230,6 +230,20 @@ describe('update settings', () => {
     await env.service.update(t.id, { protocol: 'http2' });
     expect(env.backend.calls).toContain(`restart ${t.id}`);
   });
+  it('gives the watchdog a grace period after a manual start, restart or settings change', async () => {
+    const t = await env.service.create('home');
+    const graced = () => (env.tunnels.get(t.id)!.graceUntil ?? 0) - Date.now();
+    expect(graced()).toBeGreaterThan(50_000);
+    env.tunnels.update(t.id, { graceUntil: null });
+    await env.service.restart(t.id);
+    expect(graced()).toBeGreaterThan(50_000);
+    env.tunnels.update(t.id, { graceUntil: null });
+    await env.service.start(t.id);
+    expect(graced()).toBeGreaterThan(50_000);
+    env.tunnels.update(t.id, { graceUntil: null });
+    await env.service.update(t.id, { protocol: 'http2' });
+    expect(graced()).toBeGreaterThan(50_000);
+  });
   it('start resets a failing watchdog', async () => {
     const t = await env.service.create('home');
     env.tunnels.update(t.id, { watchdogState: 'failing', restartAttempts: 5 });

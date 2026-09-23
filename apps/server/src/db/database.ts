@@ -42,6 +42,8 @@ export const MIGRATIONS: string[] = [
     select e.tunnel_name from events e where e.tunnel_id = events.tunnel_id and e.tunnel_name is not null order by e.id desc limit 1
   ) where tunnel_name is null and tunnel_id is not null;
   `,
+  // Until when the watchdog lets a tunnel the user just (re)started connect without judging it.
+  `alter table tunnels add column grace_until integer;`,
 ];
 
 export function openDatabase(path: string): Db {

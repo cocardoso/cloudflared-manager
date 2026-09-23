@@ -38,6 +38,9 @@ const NOT_IN_ACCOUNT = ['TUNNEL_NOT_FOUND', 'CF_PERMISSION_MISSING', 'CF_API_ERR
 const ROUTE_COUNT_TTL_MS = 60_000;
 const UNREACHABLE = '(account not reachable)';
 
+/** Time a tunnel the user just started gets to connect before the watchdog judges it. */
+const START_GRACE_MS = 60_000;
+
 const WATCHDOG_RESET = { watchdogState: 'healthy', restartAttempts: 0, degradedSince: null, nextRestartAt: null } as const;
 
 /**
@@ -198,6 +201,7 @@ export class TunnelService {
     const row = this.d.tunnels.get(id) ?? this.d.tunnels.insert(id, this.d.tunnels.nextMetricsPort(), accountId);
     await this.d.backend.install(id, this.envFor(row, token));
     await this.d.backend.start(id);
+    this.grace(id);
   }
 
   /** Without an account id, only a token that reaches a single account decides by itself. */
@@ -228,6 +232,10 @@ export class TunnelService {
     return this.get(id);
   }
 
+  private grace(id: string) {
+    this.d.tunnels.update(id, { graceUntil: Date.now() + START_GRACE_MS });
+  }
+
   private requireRow(id: string) {
     const row = this.d.tunnels.get(id);
     if (!row) throw new AppError('TUNNEL_NOT_MANAGED', 'Tunnel is not managed by this host', 400);
@@ -251,7 +259,10 @@ export class TunnelService {
       await this.d.backend.updateEnv(id, this.envFor(this.d.tunnels.get(id)!, token));
       // A tunnel still trying to connect gets the new settings too: they may be what lets it connect.
       const { state } = await this.d.backend.status(id);
-      if (state === 'active' || state === 'activating') await this.d.backend.restart(id);
+      if (state === 'active' || state === 'activating') {
+        await this.d.backend.restart(id);
+        this.grace(id);
+      }
     }
     this.d.events.add(id, 'config-changed', 'Tunnel settings updated', patch.name);
     return this.get(id);
@@ -261,6 +272,7 @@ export class TunnelService {
     this.requireRow(id);
     await this.d.backend.start(id);
     this.d.tunnels.update(id, WATCHDOG_RESET);
+    this.grace(id);
     this.d.events.add(id, 'started', 'Tunnel started');
   }
 
@@ -274,6 +286,7 @@ export class TunnelService {
     this.requireRow(id);
     await this.d.backend.restart(id);
     this.d.tunnels.update(id, WATCHDOG_RESET);
+    this.grace(id);
     this.d.events.add(id, 'restarted', 'Tunnel restarted manually');
   }
 

@@ -14,11 +14,14 @@ export interface TunnelRow {
   degradedSince: number | null;
   restartAttempts: number;
   nextRestartAt: number | null;
+  /** The watchdog does not count the tunnel as unhealthy before this time (ms). */
+  graceUntil: number | null;
 }
 
 interface Raw {
   id: string; account_id: string | null; metrics_port: number; keep_alive: number; tolerance_minutes: number; log_level: string; protocol: string;
   watchdog_state: string; degraded_since: number | null; restart_attempts: number; next_restart_at: number | null;
+  grace_until: number | null;
 }
 
 const toRow = (r: Raw): TunnelRow => ({
@@ -33,12 +36,13 @@ const toRow = (r: Raw): TunnelRow => ({
   degradedSince: r.degraded_since,
   restartAttempts: r.restart_attempts,
   nextRestartAt: r.next_restart_at,
+  graceUntil: r.grace_until,
 });
 
 const COLS: Record<keyof Omit<TunnelRow, 'id'>, string> = {
   accountId: 'account_id', metricsPort: 'metrics_port', keepAlive: 'keep_alive', toleranceMinutes: 'tolerance_minutes', logLevel: 'log_level',
   protocol: 'protocol', watchdogState: 'watchdog_state', degradedSince: 'degraded_since', restartAttempts: 'restart_attempts',
-  nextRestartAt: 'next_restart_at',
+  nextRestartAt: 'next_restart_at', graceUntil: 'grace_until',
 };
 
 /** Local runtime parameters of tunnels that run on this host. */
