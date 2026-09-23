@@ -1,7 +1,8 @@
 {
   "app": {
     "name": "Cloudflared Manager",
-    "tagline": "Tunnel für Ihr Homelab"
+    "tagline": "Tunnel für Ihr Homelab",
+    "disclaimer": "Cloudflared Manager ist ein unabhängiges Projekt und steht in keiner Verbindung zu Cloudflare, Inc., wird von ihr weder unterstützt noch empfohlen. Cloudflare, das Cloudflare-Logo und Cloudflare Tunnel sind Marken von Cloudflare, Inc."
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -208,7 +209,9 @@
     "notHereBanner": "Dieser Tunnel existiert in Ihrem Konto, läuft aber nicht auf diesem Host.",
     "localConfigBanner": "Dieser Tunnel verwendet eine lokale Konfigurationsdatei und kann hier nur angezeigt werden.",
     "tunnelId": "Tunnel-ID",
-    "metricsPort": "Metriken-Port"
+    "metricsPort": "Metriken-Port",
+    "details": "Details",
+    "createdAt": "Erstellt am"
   },
   "routes": {
     "empty": "Noch keine öffentlichen Hostnamen",

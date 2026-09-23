@@ -37,6 +37,24 @@ describe('RoutesTab', () => {
     expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['second.net']);
   });
 
+  it('shows progress on the move button while the new order is saved', async () => {
+    mockApi({ 'GET /api/cloudflare/status': () => json(cfStatus), [`PUT /api/tunnels/${ID}/routes`]: () => new Promise<Response>(() => {}) });
+    const two = { ...tunnel, routes: [...tunnel.routes, { hostname: 'git.example.com', service: 'http://10.0.0.9:3000' }] };
+    renderWithProviders(<RoutesTab tunnel={two} />);
+    const down = (await screen.findAllByRole('button', { name: 'Move down' }))[0]!;
+    await userEvent.click(down);
+    await waitFor(() => expect(within(down).getByRole('status')).toBeTruthy());
+  });
+  it('shows progress on reload while the tunnel is being fetched again', async () => {
+    mockApi({
+      'GET /api/cloudflare/status': () => json(cfStatus),
+      [`PUT /api/tunnels/${ID}/routes`]: () => json({ code: 'CONFIG_VERSION_CONFLICT', message: 'x', details: { currentVersion: 5 } }, 409),
+    });
+    renderWithProviders(<RoutesTab tunnel={{ ...tunnel, routes: [...tunnel.routes, { hostname: 'git.example.com', service: 'http://x:1' }] }} reloading />);
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Move down' }))[0]!);
+    const reload = await screen.findByRole('button', { name: /Reload/ });
+    expect(within(reload).getByRole('status')).toBeTruthy();
+  });
   it('lists routes above the catch-all rule', async () => {
     mockApi({ 'GET /api/cloudflare/status': () => json(cfStatus) });
     renderWithProviders(<RoutesTab tunnel={tunnel} />);

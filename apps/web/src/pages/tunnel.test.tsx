@@ -104,6 +104,17 @@ describe('TunnelPage', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.getByText('ha.example.com')).toBeTruthy();
   });
+  it('shows progress while a foreign tunnel is being taken over', async () => {
+    mockApi({
+      [`GET /api/tunnels/${ID}`]: () => json({ ...tunnel, managedHere: false, local: 'not-installed', watchdog: 'disabled', settings: null }),
+      'GET /api/cloudflare/status': () => json({ connected: true, tokenSuffix: 'abcd', lastAccountId: null, accounts: [] }),
+      [`POST /api/tunnels/${ID}/adopt`]: () => new Promise<Response>(() => {}),
+    });
+    renderWithProviders(page(), { route: `/tunnels/${ID}` });
+    const run = await screen.findByRole('button', { name: 'Run here' });
+    await userEvent.click(run);
+    await waitFor(() => expect(within(screen.getByRole('button', { name: /Run here/ })).getByRole('status')).toBeTruthy());
+  });
   it('offers to run a foreign tunnel here', async () => {
     mockApi({
       [`GET /api/tunnels/${ID}`]: () => json({ ...tunnel, managedHere: false, local: 'not-installed', watchdog: 'disabled', settings: null }),

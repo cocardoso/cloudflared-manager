@@ -1,5 +1,7 @@
 # Cloudflared Manager
 
+> An independent project, **not affiliated with or supported by Cloudflare, Inc.** See [Disclaimer](#disclaimer).
+
 A web UI to create and run **Cloudflare Tunnels** in your homelab. Deploy it as a **Proxmox LXC** (one command, [community-scripts](https://community-scripts.org/scripts/cloudflared) style) or as a **Docker container**. Configure everything from the browser, close the page, and your tunnels stay connected — nothing runs on your desktop.
 
 - Create, stop, restart, edit and delete tunnels (remotely managed through the Cloudflare API).
@@ -8,6 +10,20 @@ A web UI to create and run **Cloudflare Tunnels** in your homelab. Deploy it as 
 - Per-tunnel **keep-alive**: tunnels recover on their own from crashes, hangs, internet outages and reboots.
 - Live logs, event history, edge connections and a traffic chart.
 - UI in **English, Portuguese (Brazil), Spanish, French, Italian and German**, light and dark themes, built with the Cloudflare dashboard design system ([Kumo](https://www.npmjs.com/package/@cloudflare/kumo)).
+
+## Screenshots
+
+All data below is made up (documentation domains `example.com`/`.net`/`.org`); regenerate with `pnpm build && pnpm --filter @tm/server exec tsx ../../scripts/screenshots.mts`.
+
+![Tunnels across two Cloudflare accounts](docs/screenshots/dashboard.png)
+
+| Public hostnames | Adding a hostname |
+|---|---|
+| ![Public hostnames of a tunnel](docs/screenshots/tunnel-routes.png) | ![Add public hostname dialog](docs/screenshots/add-hostname.png) |
+| **Tunnel status** | **Settings** |
+| ![Tunnel details and edge connections](docs/screenshots/tunnel-status.png) | ![Cloudflare accounts and settings](docs/screenshots/settings.png) |
+
+![Dark theme](docs/screenshots/dashboard-dark.png)
 
 ## Choose how to run it
 
@@ -130,7 +146,7 @@ Dockerfile          Docker image (process backend)
 docker-compose.yml  Compose example
 packages/shared/    zod schemas and API types
 apps/server/        Fastify: Cloudflare API, service backends, watchdog, SQLite
-apps/web/           React + Kumo + i18n (en, pt-BR)
+apps/web/           React + Kumo + i18n (en, pt-BR, es, fr, it, de)
 e2e/                Playwright tests
 docs/               designs, plans and the manual test checklist
 ```
@@ -140,3 +156,9 @@ docs/               designs, plans and the manual test checklist
 - In an unprivileged LXC or a container, `cloudflared` may log warnings about QUIC UDP buffers and `ping_group_range` (ICMP proxy). They do not affect operation; you can force the `http2` protocol in the tunnel settings.
 - Tunnels configured with a local `config.yml` are shown read-only.
 - A single admin user.
+
+## Disclaimer
+
+Cloudflared Manager is an independent project. It is **not affiliated with, endorsed, sponsored or supported by Cloudflare, Inc.** Do not contact Cloudflare support about this app; report issues in this repository instead.
+
+Cloudflare, the Cloudflare logo, Cloudflare Tunnel and `cloudflared` are trademarks of Cloudflare, Inc., used here only to describe what the app works with. The UI is built with [Kumo](https://www.npmjs.com/package/@cloudflare/kumo), Cloudflare's open-source design system, under its own license; the `cloudflared` binary is downloaded from Cloudflare and distributed under its license.

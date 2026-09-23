@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Everything in the repository is written in English (code, comments, Markdown, commits); only the pt-BR UI bundle and its tests contain Portuguese.
-- Commits end with `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`.
+- Commits carry no co-author trailer.
 - Tunnel tokens never appear in argv, logs or API responses.
 - Container runs as non-root uid 10001 without `--privileged`.
 - `cloudflared` version pinned via `CLOUDFLARED_VERSION` build arg (default `2026.9.1`).

@@ -1,5 +1,6 @@
 import { CloudflareLogo, LayerCard, Text } from '@cloudflare/kumo';
 import type { ReactNode } from 'react';
+import { Disclaimer } from './disclaimer';
 
 /** Centered card used by the setup and login screens. */
 export function AuthLayout({ title, subtitle, children, aside }: { title: string; subtitle?: string; children: ReactNode; aside?: ReactNode }) {
@@ -21,6 +22,7 @@ export function AuthLayout({ title, subtitle, children, aside }: { title: string
         </LayerCard.Primary>
       </LayerCard>
       {aside}
+      <Disclaimer className="max-w-lg" />
     </div>
   );
 }

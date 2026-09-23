@@ -87,7 +87,11 @@ export function TunnelPage() {
         {d.remote && !d.managedHere && (
           <Banner
             description={t('tunnel.notHereBanner')}
-            action={<Banner.Action onClick={() => run('adopt', t('dashboard.adopted'))}>{t('dashboard.adopt')}</Banner.Action>}
+            action={
+              <Banner.Action loading={action.isPending && action.variables === 'adopt'} onClick={() => run('adopt', t('dashboard.adopted'))}>
+                {t('dashboard.adopt')}
+              </Banner.Action>
+            }
           />
         )}
         <Tabs
@@ -97,7 +101,7 @@ export function TunnelPage() {
           tabs={TABS.filter((x) => d.managedHere || x === 'routes' || x === 'status').map((x) => ({ value: x, label: t(`tunnel.tabs.${x}`) }))}
         />
         <div>
-          {tab === 'routes' && <RoutesTab tunnel={d} onReload={() => void tunnel.refetch()} />}
+          {tab === 'routes' && <RoutesTab tunnel={d} onReload={() => void tunnel.refetch()} reloading={tunnel.isFetching} />}
           {tab === 'status' && <StatusTab tunnel={d} />}
           {tab === 'logs' && d.managedHere && <LogsTab tunnelId={d.id} />}
           {tab === 'events' && d.managedHere && <EventsTab tunnelId={d.id} />}
