@@ -45,6 +45,9 @@ describe('RoutesTab', () => {
     await userEvent.type(within(dialog).getByLabelText('Subdomain'), 'git');
     await userEvent.type(within(dialog).getByLabelText('URL'), '10.0.0.9:3000');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await screen.findByText('DNS record already exists');
+    // The conflict prompt must be the only dialog, not stacked under the form.
+    await waitFor(() => expect(screen.getAllByRole('dialog', { hidden: true })).toHaveLength(1));
     await userEvent.click(await screen.findByRole('button', { name: 'Replace DNS record' }));
     await waitFor(() => expect(calls.filter((c) => c.key.startsWith('PUT')).length).toBe(2));
     const [first, second] = calls.filter((c) => c.key.startsWith('PUT')).map((c) => c.body as { version: number; routes: { hostname: string }[]; overwriteDns?: string[] });

@@ -45,6 +45,9 @@ export function RoutesTab({ tunnel, onReload }: { tunnel: TunnelDetail; onReload
       return true;
     } catch (e) {
       if (e instanceof ApiError && e.code === 'DNS_CONFLICT') {
+        // Swap the form for the confirmation so the prompt is never stacked under it.
+        setFormOpen(false);
+        setRemoving(null);
         setConflict({ base, pending, hostnames: (e.details as { hostnames: string[] }).hostnames });
       } else {
         setError(e);
