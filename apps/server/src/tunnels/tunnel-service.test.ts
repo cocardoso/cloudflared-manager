@@ -276,3 +276,49 @@ describe('several accounts', () => {
     expect(multi.tunnels.get(b.id)).toBeNull();
   });
 });
+
+describe('review fixes', () => {
+  let multi: Awaited<ReturnType<typeof makeTunnelEnv>>;
+  beforeEach(async () => {
+    multi = await makeTunnelEnv({ second: true });
+  });
+  afterEach(() => multi.cf.close());
+  const dropSecondAccount = () => {
+    multi.cf.state.accounts = multi.cf.state.accounts.filter((a) => a.id !== SECOND_ACCOUNT.id);
+    multi.cf.state.zones = multi.cf.state.zones.filter((z) => z.account.id !== SECOND_ACCOUNT.id);
+    multi.accounts.invalidate();
+  };
+
+  it('keeps showing, opening and deleting a tunnel whose account the token no longer reaches', async () => {
+    const b = await multi.service.create('b', SECOND_ACCOUNT.id);
+    dropSecondAccount();
+    const list = await multi.service.list();
+    expect(list.unavailableAccounts).toEqual([{ id: SECOND_ACCOUNT.id, name: SECOND_ACCOUNT.id, code: 'ACCOUNT_NOT_FOUND' }]);
+    expect(list.tunnels.find((t) => t.id === b.id)).toMatchObject({ managedHere: true, name: '(account not reachable)' });
+    expect((await multi.service.get(b.id)).name).toBe('(account not reachable)');
+    await multi.service.delete(b.id);
+    expect(multi.tunnels.get(b.id)).toBeNull();
+    expect(multi.backend.isInstalled(b.id)).toBe(false);
+  });
+  it('does not mistake a rate-limited account for "not in this account"', async () => {
+    const t = await multi.api2.createTunnel('elsewhere');
+    multi.cf.state.failNext(new RegExp(`/accounts/${SECOND_ACCOUNT.id}/cfd_tunnel/${t.id}$`), 429, [{ code: 971, message: 'Please wait' }]);
+    await expect(multi.makeService().get(t.id)).rejects.toMatchObject({ code: 'CF_RATE_LIMITED' });
+  });
+  it('still skips accounts that answer forbidden or bad request for a foreign tunnel id', async () => {
+    const t = await multi.api2.createTunnel('elsewhere');
+    multi.cf.state.failNext(new RegExp(`/accounts/${FAKE_ACCOUNT.id}/cfd_tunnel/${t.id}$`), 400, [{ code: 1001, message: 'Invalid tunnel' }]);
+    expect((await multi.makeService().get(t.id)).account.id).toBe(SECOND_ACCOUNT.id);
+  });
+  it('reuses route counts between polls instead of fetching every config each time', async () => {
+    const a = await multi.service.create('a', FAKE_ACCOUNT.id);
+    await multi.service.list();
+    const configs = () => multi.cf.state.requests.filter((r) => r === `GET /accounts/${FAKE_ACCOUNT.id}/cfd_tunnel/${a.id}/configurations`).length;
+    const before = configs();
+    await multi.service.list();
+    expect(configs()).toBe(before);
+    // A route change made here is reflected right away.
+    await multi.service.updateRoutes(a.id, upd(0, [route('ha.example.com')]));
+    expect((await multi.service.list()).tunnels.find((t) => t.id === a.id)!.routeCount).toBe(1);
+  });
+});

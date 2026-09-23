@@ -149,7 +149,8 @@
     "account": "Conta",
     "allAccounts": "Todas as contas",
     "createAccountHint": "O túnel só pode publicar hostnames em domínios desta conta.",
-    "accountUnavailable": "Não foi possível carregar os túneis de {{account}}: {{reason}}"
+    "accountUnavailable": "Não foi possível carregar os túneis de {{account}}: {{reason}}",
+    "accountsMissing": "Não foi possível carregar suas contas Cloudflare. Tente novamente em instantes."
   },
   "tunnel": {
     "tabs": {

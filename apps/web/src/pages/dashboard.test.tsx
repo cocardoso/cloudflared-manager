@@ -48,7 +48,7 @@ describe('DashboardPage', () => {
     await userEvent.clear(screen.getByLabelText('Tunnel name'));
     await userEvent.type(screen.getByLabelText('Tunnel name'), 'home');
     await userEvent.click(screen.getByRole('button', { name: 'Create' }));
-    expect(calls.find((c) => c.key === 'POST /api/tunnels')?.body).toEqual({ name: 'home' });
+    expect(calls.find((c) => c.key === 'POST /api/tunnels')?.body).toEqual({ name: 'home', accountId: HOME.id });
   });
 
   it('shows, filters and counts tunnels per account when the token reaches several', async () => {
@@ -99,5 +99,29 @@ describe('DashboardPage', () => {
     await userEvent.type(within(dialog).getByLabelText('Tunnel name'), 'home');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
     expect(calls.find((c) => c.key === 'POST /api/tunnels')?.body).toEqual({ name: 'home', accountId: SECOND.id });
+  });
+
+  it('does not claim there are no tunnels when accounts could not be read', async () => {
+    mockApi({
+      ...common,
+      'GET /api/cloudflare/status': () => json(twoAccounts),
+      'GET /api/tunnels': () => json({ tunnels: [], unavailableAccounts: [{ ...HOME, code: 'CF_RATE_LIMITED' }, { ...SECOND, code: 'CF_RATE_LIMITED' }] }),
+    });
+    renderWithProviders(<DashboardPage />);
+    expect(await screen.findByText(/Could not load tunnels from Second Org/)).toBeTruthy();
+    expect(screen.queryByText('No tunnels yet')).toBeNull();
+  });
+  it('cannot create a tunnel until the accounts are known', async () => {
+    mockApi({
+      ...common,
+      'GET /api/cloudflare/status': () => json({ ...twoAccounts, accounts: [] }),
+      'GET /api/tunnels': () => json(empty),
+    });
+    renderWithProviders(<DashboardPage />);
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Create tunnel' }))[0]!);
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('Could not load your Cloudflare accounts. Try again in a moment.')).toBeTruthy();
+    await userEvent.type(within(dialog).getByLabelText('Tunnel name'), 'home');
+    expect(within(dialog).getByRole('button', { name: 'Create' }).hasAttribute('disabled')).toBe(true);
   });
 });

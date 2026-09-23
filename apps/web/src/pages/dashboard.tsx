@@ -72,7 +72,7 @@ export function DashboardPage() {
         ))}
         {tunnels.isLoading ? (
           <div className="grid place-items-center py-16"><Loader size="lg" /></div>
-        ) : list.length === 0 && !tunnels.error ? (
+        ) : list.length === 0 && !tunnels.error && unavailable.length === 0 ? (
           <LayerCard>
             <LayerCard.Primary>
               <Empty

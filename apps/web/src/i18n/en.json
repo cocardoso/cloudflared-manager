@@ -149,7 +149,8 @@
     "account": "Account",
     "allAccounts": "All accounts",
     "createAccountHint": "The tunnel can only publish hostnames on domains of this account.",
-    "accountUnavailable": "Could not load tunnels from {{account}}: {{reason}}"
+    "accountUnavailable": "Could not load tunnels from {{account}}: {{reason}}",
+    "accountsMissing": "Could not load your Cloudflare accounts. Try again in a moment."
   },
   "tunnel": {
     "tabs": {
