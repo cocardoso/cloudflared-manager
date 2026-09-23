@@ -6,6 +6,8 @@ export interface UnitStatus { state: LocalState; activeSince: string | null; res
 
 /** Everything that touches the operating system goes through this interface. */
 export interface ServiceBackend {
+  /** Whether upgradeCloudflared() can update the binary in place. */
+  readonly canSelfUpdate: boolean;
   /** Writes the env file (0600) and enables the unit. */
   install(tunnelId: string, env: TunnelEnv): Promise<void>;
   /** Rewrites the env file without restarting. */

@@ -80,7 +80,8 @@
     "INTERNAL": "Unexpected error.",
     "DNS_RECORD_NOT_FOUND": "The DNS record no longer exists.",
     "CF_PERMISSION_MISSING_ACCOUNT": "The token cannot use {{permission}} on account \"{{account}}\". Pick another account, or check that your role in that account includes Cloudflare Tunnel.",
-    "cloudflareSaid": "Cloudflare: {{detail}}"
+    "cloudflareSaid": "Cloudflare: {{detail}}",
+    "CLOUDFLARED_UPDATE_UNSUPPORTED": "cloudflared is bundled in the Docker image. Pull the latest image and recreate the container to update it."
   },
   "setup": {
     "title": "Welcome",
@@ -142,7 +143,8 @@
     "search": "Search by tunnel name",
     "updateAvailable": "A new version of cloudflared is available ({{latest}}; installed {{installed}}).",
     "updateAction": "Update in Settings",
-    "noMatch": "No tunnels match your search"
+    "noMatch": "No tunnels match your search",
+    "updateActionImage": "How to update"
   },
   "tunnel": {
     "tabs": {
@@ -266,7 +268,8 @@
     "export": "Export",
     "import": "Import",
     "imported": "Backup imported",
-    "backupHint": "Contains tunnel settings and DNS ownership. The Cloudflare token is never exported."
+    "backupHint": "Contains tunnel settings and DNS ownership. The Cloudflare token is never exported.",
+    "imageUpdateHint": "cloudflared is bundled in the Docker image. Pull the latest image and recreate the container to update it."
   },
   "events": {
     "created": "Created",

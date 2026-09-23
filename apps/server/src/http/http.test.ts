@@ -7,6 +7,7 @@ import { startFakeCloudflare, type FakeCf } from '../../test/fake-cloudflare';
 import { loadConfig } from '../config';
 import { buildApp } from './app';
 import { createContext } from './context';
+import { FakeBackend } from '../services/fake-backend';
 
 let cf: FakeCf;
 let app: FastifyInstance;
@@ -164,8 +165,21 @@ describe('tunnels API', () => {
   it('reports and updates cloudflared version info', async () => {
     const h = await setupAdmin();
     expect((await app.inject({ url: '/api/system/cloudflared', headers: h })).json())
-      .toEqual({ installed: '2026.9.1', latest: '2026.10.0', updateAvailable: true });
+      .toEqual({ installed: '2026.9.1', latest: '2026.10.0', updateAvailable: true, canSelfUpdate: true });
     expect((await app.inject({ method: 'POST', url: '/api/system/cloudflared/update', headers: h })).statusCode).toBe(200);
+  });
+  it('refuses in-place cloudflared updates when the backend cannot self-update', async () => {
+    await app.close();
+    const config = loadConfig({ DATA_DIR: dir, ETC_DIR: join(dir, 'etc'), SERVICE_BACKEND: 'fake', CF_API_BASE: cf.baseUrl });
+    const backend = new FakeBackend(join(dir, 'etc'));
+    Object.assign(backend, { canSelfUpdate: false });
+    app = await buildApp(createContext(config, { backend, latestVersion: async () => '2026.10.0' }));
+    const h = await setupAdmin();
+    expect((await app.inject({ url: '/api/system/cloudflared', headers: h })).json().canSelfUpdate).toBe(false);
+    const r = await app.inject({ method: 'POST', url: '/api/system/cloudflared/update', headers: h });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe('CLOUDFLARED_UPDATE_UNSUPPORTED');
+    expect(backend.calls).not.toContain('upgrade');
   });
   it('exports backup without token and imports it back', async () => {
     const h = await setupAdmin();

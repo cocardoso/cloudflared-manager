@@ -42,6 +42,8 @@ function parseTimestamp(v: string | undefined) {
 }
 
 export class SystemdBackend implements ServiceBackend {
+  readonly canSelfUpdate = true;
+
   constructor(private etcDir: string, private run: Runner = defaultRunner) {}
 
   private async sudo(args: string[]) {

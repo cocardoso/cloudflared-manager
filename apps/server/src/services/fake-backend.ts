@@ -6,6 +6,7 @@ import { envFilePath, writeEnvFile } from './env-file';
 /** In-memory systemd stand-in for development and tests (SERVICE_BACKEND=fake). */
 export class FakeBackend implements ServiceBackend {
   readonly calls: string[] = [];
+  canSelfUpdate = true;
   version = '2026.9.1';
   private states = new Map<string, { state: LocalState; since: string | null; restarts: number }>();
   private listeners = new Map<string, Set<(l: LogLine) => void>>();

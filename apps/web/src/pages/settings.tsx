@@ -147,7 +147,9 @@ function CloudflaredSection() {
           <dt className="text-kumo-subtle">{t('settings.latest')}</dt>
           <dd className="font-mono">{d?.latest ?? '—'}</dd>
         </dl>
-        {d?.updateAvailable ? (
+        {d && !d.canSelfUpdate ? (
+          <Text variant="secondary" size="sm">{t('settings.imageUpdateHint')}</Text>
+        ) : d?.updateAvailable ? (
           <Button
             variant="primary"
             loading={update.isPending}

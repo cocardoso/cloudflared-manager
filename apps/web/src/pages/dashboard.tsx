@@ -42,7 +42,11 @@ export function DashboardPage() {
             variant="alert"
             icon={<ArrowCircleUpIcon />}
             description={t('dashboard.updateAvailable', { latest: info.data.latest, installed: info.data.installed })}
-            action={<Banner.Action onClick={() => nav('/settings')}>{t('dashboard.updateAction')}</Banner.Action>}
+            action={
+              <Banner.Action onClick={() => nav('/settings')}>
+                {info.data.canSelfUpdate ? t('dashboard.updateAction') : t('dashboard.updateActionImage')}
+              </Banner.Action>
+            }
           />
         )}
         <ErrorBanner error={tunnels.error} />

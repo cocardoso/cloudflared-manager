@@ -41,6 +41,10 @@ export interface CloudflareStatus { connected: boolean; accountId: string | null
 export interface SetupStatus { adminCreated: boolean; cloudflareConnected: boolean }
 export interface MetricsPoint { t: number; requests: number; errors: number }
 export interface MetricsSnapshot { points: MetricsPoint[]; haConnections: number | null }
-export interface CloudflaredVersionInfo { installed: string | null; latest: string | null; updateAvailable: boolean }
+export interface CloudflaredVersionInfo {
+  installed: string | null; latest: string | null; updateAvailable: boolean;
+  /** False when cloudflared ships inside a container image and cannot be upgraded in place. */
+  canSelfUpdate: boolean;
+}
 export interface OriginTestResult { reachable: boolean; latencyMs: number | null; error: string | null }
 export interface LogLine { time: string; level: 'debug' | 'info' | 'warn' | 'error' | 'fatal'; message: string }

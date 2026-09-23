@@ -7,7 +7,7 @@ import { SettingsPage } from './settings';
 
 const routes = {
   'GET /api/cloudflare/status': () => json({ connected: true, accountId: 'a', accountName: 'Home Lab', tokenSuffix: 'abcd', zones: [{ id: '1', name: 'example.com' }] }),
-  'GET /api/system/cloudflared': () => json({ installed: '2026.9.1', latest: '2026.10.0', updateAvailable: true }),
+  'GET /api/system/cloudflared': () => json({ installed: '2026.9.1', latest: '2026.10.0', updateAvailable: true, canSelfUpdate: true }),
   'POST /api/system/cloudflared/update': () => json({ installed: '2026.10.0', latest: '2026.10.0', updateAvailable: false }),
 };
 
@@ -32,6 +32,12 @@ describe('SettingsPage', () => {
     renderWithProviders(<SettingsPage />);
     await userEvent.click(await screen.findByRole('button', { name: 'Update' }));
     await waitFor(() => expect(calls.map((c) => c.key)).toContain('POST /api/system/cloudflared/update'));
+  });
+  it('explains image updates when cloudflared cannot be updated in place', async () => {
+    mockApi({ ...routes, 'GET /api/system/cloudflared': () => json({ installed: '2026.9.1', latest: '2026.10.0', updateAvailable: true, canSelfUpdate: false }) });
+    renderWithProviders(<SettingsPage />);
+    expect(await screen.findByText(/Pull the latest image/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Update' })).toBeNull();
   });
   it('rejects a short new password locally', async () => {
     const calls = mockApi(routes);
