@@ -39,10 +39,13 @@ export const routesUpdateSchema = z.object({
 export const logLevelSchema = z.enum(['debug', 'info', 'warn', 'error', 'fatal']);
 export const protocolSchema = z.enum(['auto', 'quic', 'http2']);
 
-export const createTunnelSchema = z.object({ name: z.string().trim().min(1).max(64).regex(/^[a-zA-Z0-9._-]+$/) });
+export const accountIdSchema = z.string().regex(/^[0-9a-f]{32}$/);
+
+const tunnelNameSchema = z.string().trim().min(1).max(64).regex(/^[a-zA-Z0-9._-]+$/);
+export const createTunnelSchema = z.object({ name: tunnelNameSchema, accountId: accountIdSchema.optional() });
 
 export const updateTunnelSchema = z.object({
-  name: createTunnelSchema.shape.name.optional(),
+  name: tunnelNameSchema.optional(),
   keepAlive: z.boolean().optional(),
   toleranceMinutes: z.number().int().min(1).max(60).optional(),
   logLevel: logLevelSchema.optional(),
@@ -55,14 +58,14 @@ export const adminSetupSchema = z.object({
 });
 export const loginSchema = z.object({ username: z.string().min(1), password: z.string().min(1) });
 export const changePasswordSchema = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(12).max(256) });
-export const cloudflareTokenSchema = z.object({ token: z.string().trim().min(20), accountId: z.string().regex(/^[0-9a-f]{32}$/).optional() });
+export const cloudflareTokenSchema = z.object({ token: z.string().trim().min(20) });
 export const testOriginSchema = z.object({ service: serviceSchema });
 
 export const backupSchema = z.object({
   version: z.literal(1),
   tunnels: z.array(z.object({
     id: uuidSchema, keepAlive: z.boolean(), toleranceMinutes: z.number().int().min(1).max(60),
-    logLevel: logLevelSchema, protocol: protocolSchema,
+    logLevel: logLevelSchema, protocol: protocolSchema, accountId: accountIdSchema.optional(),
   })),
   managedDns: z.array(z.object({ recordId: z.string(), zoneId: z.string(), hostname: hostnameSchema, tunnelId: uuidSchema })),
 });
