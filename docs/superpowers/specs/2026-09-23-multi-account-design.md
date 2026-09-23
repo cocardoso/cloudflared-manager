@@ -114,3 +114,26 @@ One API token often reaches several Cloudflare accounts (e.g. a personal account
 - Per-installation account allow-list.
 - Moving a tunnel between accounts.
 - Several tokens.
+
+## 10. Addendum — active accounts and review follow-ups (approved 2026-09-23)
+
+The out-of-scope allow-list (§9) is brought in at the user's request.
+
+### 10.1 Active accounts
+
+- **Setting** `enabled_accounts` (JSON array of account ids). Absent means **every reachable account is active** (upgrades need no action). Once saved, an account the token reaches later starts **inactive** until enabled in Settings.
+- **Directory:** `list()` returns the active accounts; `listAll()` returns every reachable account. Tunnels, account scan, creation and hostname validation use only active accounts.
+- **Replacing the token** keeps the selection intersected with the new token's accounts; an empty intersection resets it to "all".
+- **`PUT /cloudflare/accounts { enabled: string[] }`** — at least one id, each reachable (`ACCOUNT_NOT_FOUND` otherwise). Disabling an account that still has tunnels running on this host fails with `ACCOUNT_IN_USE` (409, new code) and `details.accounts` (names), so running tunnels never become invisible.
+- **Status:** each account carries `enabled: boolean`; the list includes inactive accounts.
+- **Web:** after connecting a token that reaches several accounts, the connect form shows one checkbox per account (with its domains, preset from the current selection) and a "Save accounts" button. Settings lists every account with a checkbox and a save button. Dashboard, create dialog and tunnel page only consider active accounts.
+
+### 10.2 Review follow-ups
+
+- A hostname rejected with `ZONE_NOT_FOUND` refreshes the account directory once and retries the zone match, so a domain added in Cloudflare within the cache window is accepted.
+- Discovery tolerates a forbidden `GET /accounts` (accounts then come from zones); a zone listing failure is reported as the missing Zone permission.
+- Account names seen during discovery are remembered (`account_names` setting), so an account the token no longer reaches is shown by its last known name.
+- The dashboard account filter falls back to "All accounts" when the selected account is no longer active.
+- Deleting a tunnel whose DNS records sit in zones the token cannot reach records an event naming those hostnames, so they can be removed by hand.
+- `/cloudflare/status` is re-fetched every 10 s while connected with no accounts.
+- A failed account discovery is cached for 10 s, so an outage does not trigger a new discovery on every request.

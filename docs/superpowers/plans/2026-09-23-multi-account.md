@@ -235,3 +235,17 @@ Behaviour: account `Badge` in the header badges when there is more than one acco
 - Create `tm-e2e-upcast` in UPCAST and `tm-e2e-cloudhub` in INTERCASE-CLOUDHUB; publish one hostname each on a domain of that account, pointing to a local nginx origin; confirm both over the internet (curl); confirm the hostname dialog only offers the tunnel account's domains; confirm a cross-account hostname is refused.
 - Note what the real API returns for a tunnel id queried in another account; adjust the fake if it differs.
 - Delete both tunnels through the app; check in the Cloudflare dashboard (both accounts) that tunnels and CNAMEs are gone; remove containers/volumes/images; user deletes the token.
+
+---
+
+## Addendum (spec §10)
+
+### Task 11: Active accounts — server
+- Settings: `enabledAccounts(): string[] | null`, `setEnabledAccounts(ids)`, `accountNames(): Record<string,string>`, `rememberAccountNames(list)`.
+- `AccountDirectory(client, { isEnabled?, onDiscovered?, failureTtlMs? })`: `list()` = active, `listAll()` = all, failures cached `failureTtlMs` (10 s), forbidden `/accounts` tolerated.
+- `PUT /cloudflare/accounts`, status `enabled`, token connect keeps the intersected selection, `ACCOUNT_IN_USE`.
+- TunnelService: `ZONE_NOT_FOUND` → `accounts.invalidate()` + one retry; unreachable rows named via `accountName(id)`; delete event for DNS left in unreachable zones.
+- Tests (http + directory + service) written first for every item.
+
+### Task 12: Active accounts — web
+- Connect form checkbox step; Settings account checkboxes; `activeAccounts(status)` helper used by dashboard, create dialog, tunnel page; filter fallback; status polling while connected with no accounts; i18n en/pt-BR; e2e unchecks Second Org.
