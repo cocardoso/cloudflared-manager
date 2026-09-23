@@ -26,8 +26,10 @@ export function LogsTab({ tunnelId }: { tunnelId: string }) {
             {paused ? t('tunnel.logsPaused') : connected ? t('tunnel.live') : t('tunnel.disconnected')}
           </Badge>
           <div className="flex flex-wrap items-center gap-2">
+            {/* A visible label would push the select below the buttons next to it. */}
             <Select
-              label={t('tunnel.level')}
+              aria-label={t('tunnel.level')}
+              size="sm"
               value={level}
               onValueChange={(v) => setLevel(v as LevelFilter)}
               items={{ all: t('tunnel.allLevels'), info: 'info+', warn: 'warn+', error: 'error+' }}
