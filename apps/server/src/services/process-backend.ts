@@ -5,6 +5,7 @@ import type { LocalState } from '@tm/shared';
 import { AppError } from '../errors';
 import type { LogLine, ServiceBackend, TunnelEnv, UnitStatus } from './backend';
 import { envFilePath, writeEnvFile } from './env-file';
+import { probeReady } from '../watchdog/probes';
 import { defaultRunner } from './systemd-backend';
 
 const MAX_LINES = 1000;
@@ -24,7 +25,7 @@ interface Tunnel {
   listeners: Set<(l: LogLine) => void>;
 }
 
-interface Options { etcDir: string; bin?: string; restartDelayMs?: number; stopGraceMs?: number }
+interface Options { etcDir: string; bin?: string; restartDelayMs?: number; stopGraceMs?: number; readyPollMs?: number }
 
 /** Reads the KEY=value pairs of a tunnel env file. */
 function readEnvVars(path: string): Record<string, string> {
@@ -46,11 +47,13 @@ export class ProcessBackend implements ServiceBackend {
   private bin: string;
   private restartDelayMs: number;
   private stopGraceMs: number;
+  private readyPollMs: number;
 
   constructor(private opts: Options) {
     this.bin = opts.bin ?? 'cloudflared';
     this.restartDelayMs = opts.restartDelayMs ?? 5_000;
     this.stopGraceMs = opts.stopGraceMs ?? 10_000;
+    this.readyPollMs = opts.readyPollMs ?? 1_000;
   }
 
   private entry(id: string): Tunnel {
@@ -66,7 +69,15 @@ export class ProcessBackend implements ServiceBackend {
     return envFilePath(this.opts.etcDir, id).replace(/\.env$/, '.stopped');
   }
 
-  private push(t: Tunnel, message: string) {
+  /** Only the running process can mark its tunnel connected; leftovers from a previous one cannot. */
+  private connected(t: Tunnel, from: ChildProcess) {
+    if (t.proc !== from || t.state !== 'activating') return;
+    t.state = 'active';
+    t.since = new Date().toISOString();
+  }
+
+  private push(t: Tunnel, message: string, from?: ChildProcess) {
+    if (from && message.includes('Registered tunnel connection')) this.connected(t, from);
     const tag = / (DBG|INF|WRN|ERR|FTL) /.exec(` ${message} `)?.[1];
     const line: LogLine = { time: new Date().toISOString(), level: tag ? LEVELS[tag]! : 'info', message };
     t.lines.push(line);
@@ -74,13 +85,13 @@ export class ProcessBackend implements ServiceBackend {
     t.listeners.forEach((f) => f(line));
   }
 
-  private pipe(t: Tunnel, stream: NodeJS.ReadableStream | null) {
+  private pipe(t: Tunnel, stream: NodeJS.ReadableStream | null, from: ChildProcess) {
     let buf = '';
     stream?.on('data', (d: Buffer) => {
       buf += d.toString();
       const parts = buf.split('\n');
       buf = parts.pop() ?? '';
-      for (const p of parts) if (p.trim()) this.push(t, p);
+      for (const p of parts) if (p.trim()) this.push(t, p, from);
     });
   }
 
@@ -105,15 +116,26 @@ export class ProcessBackend implements ServiceBackend {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     t.proc = proc;
-    t.state = 'active';
-    t.since = new Date().toISOString();
-    this.pipe(t, proc.stdout);
-    this.pipe(t, proc.stderr);
+    // Running is not connected: the tunnel is active once cloudflared reports an edge connection.
+    t.state = 'activating';
+    t.since = null;
+    this.pipe(t, proc.stdout, proc);
+    this.pipe(t, proc.stderr, proc);
+    // The log line is not printed above log level info, so /ready on the metrics server is asked too.
+    const port = Number((vars.TUNNEL_METRICS ?? '').split(':')[1]);
+    let readyTimer: NodeJS.Timeout | null = null;
+    const pollReady = async () => {
+      if (t.proc !== proc || t.state !== 'activating') return;
+      if (await probeReady(port, 1_000)) return this.connected(t, proc);
+      readyTimer = setTimeout(() => void pollReady(), this.readyPollMs).unref();
+    };
+    if (port) readyTimer = setTimeout(() => void pollReady(), this.readyPollMs).unref();
 
     let ended = false;
     const onEnd = (failed: boolean, reason: string) => {
       if (ended) return;
       ended = true;
+      if (readyTimer) clearTimeout(readyTimer);
       if (t.proc === proc) t.proc = null;
       t.since = null;
       if (!t.wanted) {

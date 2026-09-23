@@ -39,6 +39,7 @@ describe('SetupPage', () => {
     });
     renderWithProviders(<SetupPage />);
     const link = await screen.findByRole('link', { name: /Create token in Cloudflare/ });
+    expect(screen.getByText('Account → Account Settings → Read')).toBeTruthy();
     expect(link.getAttribute('href')).toContain('permissionGroupKeys');
     expect(link.getAttribute('target')).toBe('_blank');
   });

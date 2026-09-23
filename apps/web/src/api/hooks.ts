@@ -60,11 +60,20 @@ export const useUpdateTunnel = (id: string) =>
 export const useTunnelAction = (id: string) =>
   useInvalidating((a: 'start' | 'stop' | 'restart' | 'adopt') => api.post(`/tunnels/${id}/${a}`), [qk.tunnels, qk.tunnel(id), qk.events(id), qk.events()]);
 export const useDeleteTunnel = () => useInvalidating((id: string) => api.del(`/tunnels/${id}`), [qk.tunnels, qk.events()]);
-export const useSaveRoutes = (id: string) =>
-  useInvalidating(
-    (b: { version: number; routes: Route[]; overwriteDns?: string[]; keepDns?: string[] }) => api.put<TunnelDetail>(`/tunnels/${id}/routes`, b),
-    [qk.tunnel(id), qk.tunnels, qk.events(id)],
-  );
+/** The save answers with the updated tunnel: show it right away and refresh the rest in the background. */
+export function useSaveRoutes(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (b: { version: number; routes: Route[]; overwriteDns?: string[]; keepDns?: string[] }) =>
+      api.put<TunnelDetail>(`/tunnels/${id}/routes`, b),
+    onSuccess: async (detail) => {
+      // A reload started before the save would land afterwards with the old routes.
+      await qc.cancelQueries({ queryKey: qk.tunnel(id) });
+      qc.setQueryData(qk.tunnel(id), detail);
+      for (const k of [qk.tunnels, qk.events(id)]) void qc.invalidateQueries({ queryKey: k });
+    },
+  });
+}
 export const useTestOrigin = () =>
   useMutation({ mutationFn: (service: string) => api.post<OriginTestResult>('/tools/test-origin', { service }) });
 export const useUpdateCloudflared = () =>

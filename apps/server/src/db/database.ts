@@ -32,6 +32,16 @@ export const MIGRATIONS: string[] = [
   alter table tunnels add column account_id text;
   update tunnels set account_id = (select value from settings where key = 'cf_account_id');
   `,
+  // Events keep the tunnel's name so they stay readable after the tunnel is deleted. Older events
+  // take it from their tunnel's 'Tunnel "<name>" created/adopted' message (8 characters before, 9 after).
+  `
+  alter table events add column tunnel_name text;
+  update events set tunnel_name = substr(message, 9, length(message) - 17)
+    where type in ('created', 'adopted') and message like 'Tunnel "%';
+  update events set tunnel_name = (
+    select e.tunnel_name from events e where e.tunnel_id = events.tunnel_id and e.tunnel_name is not null order by e.id desc limit 1
+  ) where tunnel_name is null and tunnel_id is not null;
+  `,
 ];
 
 export function openDatabase(path: string): Db {

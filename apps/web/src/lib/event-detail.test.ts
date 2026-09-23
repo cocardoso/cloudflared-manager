@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import i18n from '../i18n';
 import { eventDetail } from './event-detail';
 
-const ev = (type: TunnelEvent['type'], message: string): TunnelEvent => ({ id: 1, tunnelId: null, type, message, createdAt: '' });
+const ev = (type: TunnelEvent['type'], message: string): TunnelEvent => ({ id: 1, tunnelId: null, tunnelName: null, type, message, createdAt: '' });
 const t = i18n.t.bind(i18n);
 
 beforeEach(async () => {

@@ -9,6 +9,8 @@ describe('buildTokenTemplateUrl', () => {
       { key: 'argotunnel', type: 'edit' },
       { key: 'dns', type: 'edit' },
       { key: 'zone', type: 'read' },
+      // Lets GET /accounts list accounts that have no domain yet.
+      { key: 'account_settings', type: 'read' },
     ]);
     expect(u.searchParams.get('accountId')).toBe('*');
     expect(u.searchParams.get('zoneId')).toBe('all');

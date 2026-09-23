@@ -93,6 +93,21 @@ describe('updateRoutes', () => {
     const rec = env.cf.state.dns.get(zone1())!.find((r) => r.name === 'ha.example.com')!;
     expect(rec).toMatchObject({ type: 'CNAME', content: `${t.id}.cfargotunnel.com` });
   });
+  it('saves a hostname with the minimum of Cloudflare calls and no re-read afterwards', async () => {
+    const t = await env.service.create('home');
+    await env.accounts.list();
+    env.cf.state.requests.length = 0;
+    const d = await env.service.updateRoutes(t.id, upd(0, [route('ha.example.com')]));
+    expect(d).toMatchObject({ configVersion: 1, routeCount: 1, routes: [{ hostname: 'ha.example.com' }], account: { name: 'Home Lab' } });
+    const calls = env.cf.state.requests.map((r) => r.replace(t.id, ':id').replace(zone1(), ':zone'));
+    expect(calls.sort()).toEqual([
+      'GET /accounts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/cfd_tunnel/:id',
+      'GET /accounts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/cfd_tunnel/:id/configurations',
+      'GET /zones/:zone/dns_records',
+      'POST /zones/:zone/dns_records',
+      'PUT /accounts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/cfd_tunnel/:id/configurations',
+    ].sort());
+  });
   it('reuses CNAME already pointing to this tunnel', async () => {
     const t = await env.service.create('home');
     env.cf.state.dns.get(zone1())!.push({ id: 'r9', name: 'ha.example.com', type: 'CNAME', content: `${t.id}.cfargotunnel.com`, proxied: true });
@@ -173,6 +188,17 @@ describe('delete', () => {
     expect(env.cf.state.tunnels.get(t.id)!.tunnel.deleted_at).not.toBeNull();
     expect(env.tunnels.get(t.id)).toBeNull();
   });
+  it('names the deletion event even when older events were pruned', async () => {
+    const t = await env.service.create('home');
+    env.db.prepare('delete from events').run();
+    await env.service.delete(t.id);
+    expect(env.events.list({ tunnelId: t.id, limit: 1 })[0]).toMatchObject({ type: 'deleted', tunnelName: 'home' });
+  });
+  it('keeps the tunnel name on its deletion event', async () => {
+    const t = await env.service.create('home');
+    await env.service.delete(t.id);
+    expect(env.events.list({ tunnelId: t.id, limit: 1 })[0]).toMatchObject({ type: 'deleted', tunnelName: 'home' });
+  });
   it('is idempotent when parts are already gone', async () => {
     const t = await env.service.create('home');
     await env.service.updateRoutes(t.id, upd(0, [route('ha.example.com')]));
@@ -197,6 +223,12 @@ describe('update settings', () => {
     const t = await env.api.createTunnel('elsewhere');
     await expect(env.service.update(t.id, { keepAlive: false })).rejects.toMatchObject({ code: 'TUNNEL_NOT_MANAGED' });
     await expect(env.service.start(t.id)).rejects.toMatchObject({ code: 'TUNNEL_NOT_MANAGED' });
+  });
+  it('restarts a tunnel still connecting when its protocol changes', async () => {
+    const t = await env.service.create('home');
+    env.backend.setState(t.id, 'activating');
+    await env.service.update(t.id, { protocol: 'http2' });
+    expect(env.backend.calls).toContain(`restart ${t.id}`);
   });
   it('start resets a failing watchdog', async () => {
     const t = await env.service.create('home');

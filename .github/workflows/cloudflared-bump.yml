@@ -24,7 +24,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
       - if: steps.versions.outputs.latest != steps.versions.outputs.current
-        run: sed -i "s/^ARG CLOUDFLARED_VERSION=.*/ARG CLOUDFLARED_VERSION=${{ steps.versions.outputs.latest }}/" Dockerfile
+        # The image verifies the binary against these digests, taken from the release's own assets.
+        run: |
+          tag=${{ steps.versions.outputs.latest }}
+          digest() { gh api "repos/cloudflare/cloudflared/releases/tags/$tag" --jq ".assets[] | select(.name == \"cloudflared-linux-$1\") | .digest" | sed 's/^sha256://'; }
+          amd64=$(digest amd64); arm64=$(digest arm64)
+          [[ ${#amd64} == 64 && ${#arm64} == 64 ]] || { echo "missing digests for $tag"; exit 1; }
+          sed -i -e "s/^ARG CLOUDFLARED_VERSION=.*/ARG CLOUDFLARED_VERSION=$tag/" \
+                 -e "s/^ARG CLOUDFLARED_SHA256_AMD64=.*/ARG CLOUDFLARED_SHA256_AMD64=$amd64/" \
+                 -e "s/^ARG CLOUDFLARED_SHA256_ARM64=.*/ARG CLOUDFLARED_SHA256_ARM64=$arm64/" Dockerfile
+        env:
+          GH_TOKEN: ${{ github.token }}
       - if: steps.versions.outputs.latest != steps.versions.outputs.current
         uses: peter-evans/create-pull-request@v7
         with:

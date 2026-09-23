@@ -18,13 +18,15 @@ export function EventList({ events, names }: { events: TunnelEvent[]; names?: Re
     <ol className="flex flex-col">
       {events.map((e) => {
         const detail = eventDetail(e, t);
+        // Lists spanning several tunnels name them; a deleted tunnel keeps the name recorded on its events.
+        const name = names && ((e.tunnelId && names[e.tunnelId]) || e.tunnelName);
         return (
         <li key={e.id} className="flex items-start gap-3 border-b border-kumo-hairline py-2.5 last:border-0">
           <span className={`mt-1.5 size-2 shrink-0 rounded-full ${DOT[e.type] ?? 'bg-kumo-info'}`} />
           <div className="flex min-w-0 flex-1 flex-col">
             <div className="flex flex-wrap items-baseline gap-x-2">
               <Text bold size="sm">{t(`events.${e.type}`)}</Text>
-              {names && e.tunnelId && names[e.tunnelId] && <Text variant="secondary" size="sm">{names[e.tunnelId]}</Text>}
+              {name && <Text variant="secondary" size="sm">{name}</Text>}
             </div>
             {detail && <Text variant="secondary" size="sm">{detail}</Text>}
           </div>

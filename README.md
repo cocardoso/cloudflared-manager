@@ -64,6 +64,7 @@ Images are multi-arch (`linux/amd64`, `linux/arm64`) and tagged `latest`, `<majo
    - Account → Cloudflare Tunnel → Edit
    - Zone → DNS → Edit
    - Zone → Zone → Read
+   - Account → Account Settings → Read (lets the app see accounts that have no domain yet)
    - Account and zone resources: all
 
    If the token reaches several accounts, pick the ones the app should work with (all are checked by default); you can change this later in **Settings**, where accounts the token reaches later also show up, unchecked. When you create a tunnel you choose its account, and its public hostnames can only use domains of that same account (Cloudflare only routes a tunnel's traffic for DNS records in the tunnel's own account).

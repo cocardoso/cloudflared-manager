@@ -21,7 +21,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: bash scripts/package-release.sh "${GITHUB_REF_NAME}"
-      - run: gh release create "${GITHUB_REF_NAME}" "release/cloudflared-manager-${GITHUB_REF_NAME}.tar.gz" --generate-notes
+      # A tag with a hyphen (v1.2.0-rc1) is a pre-release: installers, which follow releases/latest, skip it.
+      - run: |
+          flags=(--generate-notes)
+          [[ "${GITHUB_REF_NAME}" == *-* ]] && flags+=(--prerelease)
+          gh release create "${GITHUB_REF_NAME}" "${flags[@]}" \
+            "release/cloudflared-manager-${GITHUB_REF_NAME}.tar.gz" "release/cloudflared-manager-${GITHUB_REF_NAME}.tar.gz.sha256"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -48,7 +53,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
       - uses: docker/build-push-action@v6
         with:
           context: .

@@ -52,6 +52,7 @@ export function ConnectCloudflareForm({ onConnected }: { onConnected?: (s: Cloud
           <li>{t('setup.permTunnel')}</li>
           <li>{t('setup.permDns')}</li>
           <li>{t('setup.permZone')}</li>
+          <li>{t('setup.permAccount')}</li>
           <li>{t('setup.allZones')}</li>
         </ul>
       </div>
