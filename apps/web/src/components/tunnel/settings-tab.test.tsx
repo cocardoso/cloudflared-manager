@@ -1,4 +1,6 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
+import { useState } from 'react';
+import { Route, Routes } from 'react-router';
 import userEvent from '@testing-library/user-event';
 import type { TunnelDetail } from '@tm/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -47,5 +49,32 @@ describe('SettingsTab', () => {
     expect(confirm.hasAttribute('disabled')).toBe(false);
     await userEvent.click(confirm);
     await waitFor(() => expect(calls.map((c) => c.key)).toContain(`DELETE /api/tunnels/${ID}`));
+  });
+  it('returns to the dashboard even if the tab unmounts while deleting', async () => {
+    let hide: () => void = () => undefined;
+    function Harness() {
+      const [shown, setShown] = useState(true);
+      hide = () => setShown(false);
+      return shown ? <SettingsTab tunnel={tunnel} /> : <p>tab gone</p>;
+    }
+    mockApi({
+      [`DELETE /api/tunnels/${ID}`]: () => {
+        // The tunnel page drops this tab as soon as the tunnel stops being "managed here".
+        act(() => hide());
+        return new Response(null, { status: 204 });
+      },
+    });
+    renderWithProviders(
+      <Routes>
+        <Route path="/" element={<p>dashboard page</p>} />
+        <Route path="/tunnels/:id" element={<Harness />} />
+      </Routes>,
+      { route: `/tunnels/${ID}` },
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Delete tunnel' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.type(within(dialog).getByLabelText('Type home to confirm'), 'home');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete tunnel' }));
+    expect(await screen.findByText('dashboard page')).toBeTruthy();
   });
 });

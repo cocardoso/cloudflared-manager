@@ -11,6 +11,7 @@ import { EventRepo } from '../events/event-repo';
 import { MetricsSampler } from '../metrics/sampler';
 import type { ServiceBackend } from '../services/backend';
 import { FakeBackend } from '../services/fake-backend';
+import { ProcessBackend } from '../services/process-backend';
 import { SystemdBackend } from '../services/systemd-backend';
 import { SettingsRepo } from '../settings/settings-repo';
 import { latestCloudflaredVersion } from '../system/cloudflared-info';
@@ -43,7 +44,13 @@ export function createContext(
   mkdirSync(config.dataDir, { recursive: true });
   const db = openDatabase(join(config.dataDir, 'data.db'));
   const settings = new SettingsRepo(db, loadOrCreateKey(join(config.etcDir, 'secret.key')));
-  const backend = overrides.backend ?? (config.serviceBackend === 'fake' ? new FakeBackend(config.etcDir) : new SystemdBackend(config.etcDir));
+  const backend =
+    overrides.backend ??
+    (config.serviceBackend === 'fake'
+      ? new FakeBackend(config.etcDir)
+      : config.serviceBackend === 'process'
+        ? new ProcessBackend({ etcDir: config.etcDir, bin: config.cloudflaredBin })
+        : new SystemdBackend(config.etcDir));
   const cfClient = (token: string) => new CfClient({ token, baseUrl: config.cfApiBase });
 
   let cached: { token: string; accountId: string; api: CfApi } | null = null;

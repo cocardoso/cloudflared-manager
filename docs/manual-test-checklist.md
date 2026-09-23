@@ -1,10 +1,10 @@
-# Manual test checklist on Proxmox
+# Manual test checklist
 
-Run before each release. Record the observed result for each item.
+Run before each release, for both deployment targets. Record the observed result for each item.
 
-## Installation
+## Proxmox installation
 
-- [ ] Run the installation command on the host; the LXC is created with Debian 13, 1 vCPU, 1 GB RAM, 4 GB disk, unprivileged.
+- [ ] Run `bash -c "$(curl -fsSL https://raw.githubusercontent.com/cocardoso/cloudflared-manager/main/proxmox/ct/cloudflared-manager.sh)"` on the host; the LXC is created with Debian 13, 1 vCPU, 1 GB RAM, 4 GB disk, unprivileged.
 - [ ] `http://<ip>:8080` opens the welcome screen.
 - [ ] Inside the LXC: `systemctl status tunnel-manager` is active; `ls -l /etc/tunnel-manager/secret.key` shows mode `-rw-------` and owner `tunnelmgr`.
 - [ ] `ls -ln /opt/tunnel-manager` shows every file owned by root (uid 0).
@@ -46,3 +46,14 @@ Run before each release. Record the observed result for each item.
 - [ ] Delete a tunnel: it disappears from Cloudflare, DNS and systemd.
 - [ ] 6 wrong logins in a row: the sixth attempt is blocked for 1 minute.
 - [ ] Switch language and theme; the choice persists after reloading.
+
+## Docker
+
+- [ ] `docker compose up -d` with the published image; `docker inspect -f '{{.State.Health.Status}}' cloudflared-manager` becomes `healthy`.
+- [ ] `docker exec cloudflared-manager id -u` prints `10001`; the container runs without `--privileged`.
+- [ ] Create a tunnel and a public hostname pointing at another Compose service; external access returns 200.
+- [ ] `docker exec cloudflared-manager ps -eo args` shows `cloudflared --no-autoupdate tunnel run` without the token.
+- [ ] `docker exec cloudflared-manager pkill -9 cloudflared`: the tunnel is back within ~5 s.
+- [ ] Stop a tunnel from the UI, then `docker restart cloudflared-manager`: the stopped tunnel stays stopped, the others come back.
+- [ ] Settings shows the "pull the latest image" hint instead of an Update button.
+- [ ] `docker compose pull && docker compose up -d` keeps the data volume, tunnels and routes.

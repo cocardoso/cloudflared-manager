@@ -2,7 +2,7 @@
 
 # Copyright (c) 2026 cesar
 # License: MIT
-# Source: https://github.com/cocardoso/cloudflared-proxmox
+# Source: https://github.com/cocardoso/cloudflared-manager
 
 source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
@@ -12,7 +12,7 @@ setting_up_container
 network_check
 update_os
 
-GH_REPO="${TM_GH_REPO:-cocardoso/cloudflared-proxmox}"
+GH_REPO="${TM_GH_REPO:-cocardoso/cloudflared-manager}"
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y curl ca-certificates sudo jq

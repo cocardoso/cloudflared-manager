@@ -1,0 +1,36 @@
+name: cloudflared-bump
+# Opens a pull request when Cloudflare publishes a newer cloudflared, so the Docker image
+# (which bundles cloudflared) can be released with it.
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: versions
+        run: |
+          latest=$(gh api repos/cloudflare/cloudflared/releases/latest --jq .tag_name)
+          current=$(sed -n 's/^ARG CLOUDFLARED_VERSION=//p' Dockerfile)
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - if: steps.versions.outputs.latest != steps.versions.outputs.current
+        run: sed -i "s/^ARG CLOUDFLARED_VERSION=.*/ARG CLOUDFLARED_VERSION=${{ steps.versions.outputs.latest }}/" Dockerfile
+      - if: steps.versions.outputs.latest != steps.versions.outputs.current
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: chore/cloudflared-${{ steps.versions.outputs.latest }}
+          commit-message: "chore(docker): bump cloudflared to ${{ steps.versions.outputs.latest }}"
+          title: "chore(docker): bump cloudflared to ${{ steps.versions.outputs.latest }}"
+          body: |
+            cloudflared ${{ steps.versions.outputs.latest }} is available (image currently bundles ${{ steps.versions.outputs.current }}).
+            Merge, then tag a release to publish a new Docker image.

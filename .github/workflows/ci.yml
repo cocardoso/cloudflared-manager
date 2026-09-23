@@ -21,4 +21,16 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm e2e
       - run: sudo apt-get install -y shellcheck
-      - run: shellcheck -x -e SC1090,SC1091,SC2034,SC2154 ct/*.sh install/*.sh scripts/*.sh
+      - run: shellcheck -x -e SC1090,SC1091,SC2034,SC2154 ct/*.sh proxmox/ct/*.sh proxmox/install/*.sh scripts/*.sh
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

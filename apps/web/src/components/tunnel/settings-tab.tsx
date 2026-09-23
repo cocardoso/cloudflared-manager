@@ -31,15 +31,14 @@ function DeleteTunnelDialog({ tunnel, open, onOpenChange }: { tunnel: TunnelDeta
               variant="destructive"
               disabled={typed !== tunnel.name}
               loading={del.isPending}
-              onClick={() =>
-                del.mutate(tunnel.id, {
-                  onSuccess: () => {
-                    toasts.add({ title: t('tunnel.deleted') });
-                    onOpenChange(false);
-                    nav('/');
-                  },
-                })
-              }
+              onClick={async () => {
+                // Awaiting the promise (instead of mutate callbacks) still navigates if this tab
+                // unmounts once the tunnel is gone.
+                const ok = await del.mutateAsync(tunnel.id).then(() => true, () => false);
+                if (!ok) return;
+                toasts.add({ title: t('tunnel.deleted') });
+                nav('/');
+              }}
             >
               {t('tunnel.deleteButton')}
             </Button>

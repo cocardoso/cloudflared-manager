@@ -1,0 +1,15 @@
+# Cloudflared Manager — run with: docker compose up -d   (UI at http://<host>:8080)
+services:
+  cloudflared-manager:
+    image: ghcr.io/cocardoso/cloudflared-manager:latest
+    container_name: cloudflared-manager
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - cloudflared-manager-data:/data
+    # Linux only: share the host network so routes can use 127.0.0.1 services of the host.
+    # network_mode: host
+
+volumes:
+  cloudflared-manager-data:

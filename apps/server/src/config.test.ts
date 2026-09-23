@@ -9,6 +9,11 @@ describe('loadConfig', () => {
     expect(isAbsolute(c.etcDir)).toBe(true);
     expect(isAbsolute(c.webDist!)).toBe(true);
   });
+  it('selects the process backend and cloudflared binary', () => {
+    expect(loadConfig({ SERVICE_BACKEND: 'process', CLOUDFLARED_BIN: '/usr/local/bin/cloudflared' }))
+      .toMatchObject({ serviceBackend: 'process', cloudflaredBin: '/usr/local/bin/cloudflared' });
+    expect(loadConfig({}).cloudflaredBin).toBe('cloudflared');
+  });
   it('uses production defaults', () => {
     expect(loadConfig({})).toMatchObject({ port: 8080, dataDir: '/var/lib/tunnel-manager', etcDir: '/etc/tunnel-manager', serviceBackend: 'systemd', webDist: null });
   });

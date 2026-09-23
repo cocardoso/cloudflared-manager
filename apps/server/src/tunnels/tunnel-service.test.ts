@@ -37,6 +37,15 @@ describe('create / list', () => {
   });
 });
 
+describe('deleted tunnels', () => {
+  it('treats a tunnel deleted in Cloudflare as not found', async () => {
+    const t = await env.api.createTunnel('gone');
+    await env.api.deleteTunnel(t.id);
+    await expect(env.service.get(t.id)).rejects.toMatchObject({ code: 'TUNNEL_NOT_FOUND', status: 404 });
+    await expect(env.service.adopt(t.id)).rejects.toMatchObject({ code: 'TUNNEL_NOT_FOUND' });
+  });
+});
+
 describe('adopt', () => {
   it('installs existing remote tunnel', async () => {
     const t = await env.api.createTunnel('elsewhere');
