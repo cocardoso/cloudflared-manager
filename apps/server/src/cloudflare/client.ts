@@ -12,6 +12,10 @@ export class CfClient {
     this.fetchImpl = opts.fetch ?? fetch;
   }
 
+  get token() {
+    return this.opts.token;
+  }
+
   async raw<T>(method: string, path: string, body?: unknown): Promise<CfEnvelope<T>> {
     let res: Response;
     try {

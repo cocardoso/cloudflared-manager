@@ -18,7 +18,7 @@ async function setup() {
   const tunnels = new TunnelRepo(db);
   const events = new EventRepo(db, () => now);
   const backend = new FakeBackend(mkdtempSync(join(tmpdir(), 'tm-')));
-  tunnels.insert(ID, 20241);
+  tunnels.insert(ID, 20241, 'a'.repeat(32));
   await backend.install(ID, { token: 't', metricsPort: 20241, logLevel: 'info', protocol: 'auto' });
   await backend.start(ID);
   const wd = new Watchdog({ tunnels, backend, events, probeReady: async () => ready, probeInternet: async () => internet, now: () => now });

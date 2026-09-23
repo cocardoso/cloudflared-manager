@@ -3,7 +3,8 @@
 A web UI to create and run **Cloudflare Tunnels** in your homelab. Deploy it as a **Proxmox LXC** (one command, [community-scripts](https://community-scripts.org/scripts/cloudflared) style) or as a **Docker container**. Configure everything from the browser, close the page, and your tunnels stay connected — nothing runs on your desktop.
 
 - Create, stop, restart, edit and delete tunnels (remotely managed through the Cloudflare API).
-- Publish services from your network under **any domain in your account** (`app.domain-a.com`, `git.domain-b.dev`…), with automatic CNAME creation and removal and DNS-conflict protection.
+- Publish services from your network under **any domain of the tunnel's account** (`app.domain-a.com`, `git.domain-b.dev`…), with automatic CNAME creation and removal and DNS-conflict protection.
+- Works with **several Cloudflare accounts** behind one token: choose the active ones, see their tunnels in one list filtered by account, and pick the account when creating a tunnel.
 - Per-tunnel **keep-alive**: tunnels recover on their own from crashes, hangs, internet outages and reboots.
 - Live logs, event history, edge connections and a traffic chart.
 - UI in **English and Portuguese (Brazil)**, light and dark themes, built with the Cloudflare dashboard design system ([Kumo](https://www.npmjs.com/package/@cloudflare/kumo)).
@@ -65,7 +66,7 @@ Images are multi-arch (`linux/amd64`, `linux/arm64`) and tagged `latest`, `<majo
    - Zone → Zone → Read
    - Account and zone resources: all
 
-   If the token can access several accounts, the UI asks you to pick one.
+   If the token reaches several accounts, pick the ones the app should work with (all are checked by default); you can change this later in **Settings**, where accounts the token reaches later also show up, unchecked. When you create a tunnel you choose its account, and its public hostnames can only use domains of that same account (Cloudflare only routes a tunnel's traffic for DNS records in the tunnel's own account).
 
 The token is stored encrypted (AES-256-GCM) and is never sent back to the browser. Each tunnel's own token is kept in a `0600` file and passed to `cloudflared` through its environment, never on the command line.
 

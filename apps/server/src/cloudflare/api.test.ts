@@ -15,9 +15,8 @@ beforeEach(async () => {
 afterEach(() => cf.close());
 
 describe('CfApi', () => {
-  it('verifies token and lists accounts and zones', async () => {
+  it('verifies token and lists zones', async () => {
     expect((await CfApi.verifyToken(client)).status).toBe('active');
-    expect(await CfApi.listAccounts(client)).toEqual([FAKE_ACCOUNT]);
     expect((await api.listZones()).map((z) => z.name)).toEqual(['example.com', 'other.dev']);
   });
   it('creates a remotely-managed tunnel and fetches its token and config', async () => {

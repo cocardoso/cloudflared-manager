@@ -16,7 +16,10 @@ export async function tunnelRoutes(app: FastifyInstance, ctx: AppContext) {
   const s = ctx.service;
 
   app.get('/tunnels', () => s.list());
-  app.post('/tunnels', async (req, reply) => reply.code(201).send(await s.create(createTunnelSchema.parse(req.body).name)));
+  app.post('/tunnels', async (req, reply) => {
+    const { name, accountId } = createTunnelSchema.parse(req.body);
+    return reply.code(201).send(await s.create(name, accountId));
+  });
   app.get('/tunnels/:id', (req) => s.get(idOf(req)));
   app.patch('/tunnels/:id', (req) => s.update(idOf(req), updateTunnelSchema.parse(req.body)));
   app.delete('/tunnels/:id', async (req, reply) => {

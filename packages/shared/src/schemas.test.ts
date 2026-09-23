@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { routeSchema, routesUpdateSchema, adminSetupSchema, uuidSchema } from './schemas';
+import { adminSetupSchema, backupSchema, enabledAccountsSchema, cloudflareTokenSchema, createTunnelSchema, routeSchema, routesUpdateSchema, uuidSchema } from './schemas';
+import { ERROR_CODES } from './errors';
 
 describe('routeSchema', () => {
   it('accepts http service with hostname', () => {
@@ -52,5 +53,36 @@ describe('uuidSchema', () => {
   it('rejects path traversal', () => {
     expect(() => uuidSchema.parse('../../etc/passwd')).toThrow();
     expect(uuidSchema.parse('6ff42ae2-765d-4adf-8112-31c55c1551ef')).toBeTruthy();
+  });
+});
+
+describe('account selection', () => {
+  const A = 'a'.repeat(32);
+  it('createTunnelSchema takes an optional account id', () => {
+    expect(createTunnelSchema.parse({ name: 'home' })).toEqual({ name: 'home' });
+    expect(createTunnelSchema.parse({ name: 'home', accountId: A })).toEqual({ name: 'home', accountId: A });
+    expect(createTunnelSchema.safeParse({ name: 'home', accountId: 'x' }).success).toBe(false);
+  });
+  it('cloudflareTokenSchema no longer carries an account', () => {
+    expect(cloudflareTokenSchema.parse({ token: 't'.repeat(40), accountId: A })).toEqual({ token: 't'.repeat(40) });
+  });
+  it('backupSchema accepts tunnels with and without an account', () => {
+    const t = { id: '6ff42ae2-765d-4adf-8112-31c55c1551ef', keepAlive: true, toleranceMinutes: 2, logLevel: 'info', protocol: 'auto' };
+    expect(backupSchema.parse({ version: 1, tunnels: [t], managedDns: [] }).tunnels[0]).not.toHaveProperty('accountId');
+    expect(backupSchema.parse({ version: 1, tunnels: [{ ...t, accountId: A }], managedDns: [] }).tunnels[0]!.accountId).toBe(A);
+  });
+  it('knows ACCOUNT_NOT_FOUND', () => {
+    expect(ERROR_CODES).toContain('ACCOUNT_NOT_FOUND');
+  });
+});
+
+describe('enabledAccountsSchema', () => {
+  it('needs at least one valid account id', () => {
+    expect(enabledAccountsSchema.parse({ enabled: ['a'.repeat(32)] })).toEqual({ enabled: ['a'.repeat(32)] });
+    expect(enabledAccountsSchema.safeParse({ enabled: [] }).success).toBe(false);
+    expect(enabledAccountsSchema.safeParse({ enabled: ['x'] }).success).toBe(false);
+  });
+  it('knows ACCOUNT_IN_USE', () => {
+    expect(ERROR_CODES).toContain('ACCOUNT_IN_USE');
   });
 });

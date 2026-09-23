@@ -3,7 +3,10 @@ import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import { startFakeCloudflare, type FakeCf } from '../../test/fake-cloudflare';
+import { FAKE_ACCOUNT, SECOND_ACCOUNT, startFakeCloudflare, type FakeCf } from '../../test/fake-cloudflare';
+import { openDatabase } from '../db/database';
+import { loadOrCreateKey } from '../crypto/secret-box';
+import { SettingsRepo } from '../settings/settings-repo';
 import { loadConfig } from '../config';
 import { buildApp } from './app';
 import { createContext } from './context';
@@ -86,20 +89,27 @@ describe('cloudflare connection', () => {
     const h = await setupAdmin();
     await connect(h);
     const s = (await app.inject({ url: '/api/cloudflare/status', headers: h })).json();
-    expect(s).toMatchObject({ connected: true, accountName: 'Home Lab', tokenSuffix: cf.token.slice(-4) });
+    expect(s).toMatchObject({ connected: true, tokenSuffix: cf.token.slice(-4), lastAccountId: null });
     expect(JSON.stringify(s)).not.toContain(cf.token);
-    expect(s.zones.map((z: { name: string }) => z.name)).toEqual(['example.com', 'other.dev']);
+    expect(s.accounts).toEqual([{ id: FAKE_ACCOUNT.id, name: 'Home Lab', enabled: true, zones: [{ id: cf.state.zones[0]!.id, name: 'example.com' }, { id: cf.state.zones[1]!.id, name: 'other.dev' }] }]);
     expect((await app.inject('/api/setup/status')).json()).toEqual({ adminCreated: true, cloudflareConnected: true });
   });
-  it('asks for account selection when token has several accounts', async () => {
+  it('connects to every account the token reaches without asking', async () => {
     const h = await setupAdmin();
-    cf.state.accounts.push({ id: 'b'.repeat(32), name: 'Work' });
-    cf.state.zones.push({ id: `${'y'.repeat(31)}3`, name: 'work.io', status: 'active', account: { id: 'b'.repeat(32), name: 'Work' } });
+    cf.state.addSecondAccount();
     const r = await app.inject({ method: 'POST', url: '/api/cloudflare/token', headers: h, payload: { token: cf.token } });
-    expect(r.statusCode).toBe(409);
-    expect(r.json().details.accounts).toHaveLength(2);
-    const ok = await app.inject({ method: 'POST', url: '/api/cloudflare/token', headers: h, payload: { token: cf.token, accountId: 'b'.repeat(32) } });
-    expect(ok.json().accountName).toBe('Work');
+    expect(r.statusCode).toBe(200);
+    expect(r.json().accounts.map((a: { name: string; zones: { name: string }[] }) => [a.name, a.zones.map((z) => z.name)])).toEqual([
+      ['Home Lab', ['example.com', 'other.dev']],
+      ['Second Org', ['second.net']],
+    ]);
+  });
+  it('connects when only some accounts allow tunnels', async () => {
+    const h = await setupAdmin();
+    cf.state.addSecondAccount();
+    cf.state.failNext(new RegExp(`/accounts/${SECOND_ACCOUNT.id}/cfd_tunnel$`), 403, [{ code: 10000, message: 'Authentication error' }]);
+    const r = await app.inject({ method: 'POST', url: '/api/cloudflare/token', headers: h, payload: { token: cf.token } });
+    expect(r.statusCode).toBe(200);
   });
   it('discovers the account from zones when /accounts comes back empty', async () => {
     // Tokens without "Account Settings: Read" get an empty account list.
@@ -107,7 +117,7 @@ describe('cloudflare connection', () => {
     cf.state.accounts = [];
     const r = await app.inject({ method: 'POST', url: '/api/cloudflare/token', headers: h, payload: { token: cf.token } });
     expect(r.statusCode).toBe(200);
-    expect(r.json()).toMatchObject({ connected: true, accountName: 'Home Lab' });
+    expect(r.json()).toMatchObject({ connected: true, accounts: [{ name: 'Home Lab' }] });
   });
   it('rejects invalid token', async () => {
     const h = await setupAdmin();
@@ -126,6 +136,65 @@ describe('cloudflare connection', () => {
   it('returns CF_NOT_CONNECTED before token is set', async () => {
     const h = await setupAdmin();
     expect((await app.inject({ url: '/api/tunnels', headers: h })).json().code).toBe('CF_NOT_CONNECTED');
+  });
+});
+
+describe('active accounts', () => {
+  const put = (h: { cookie: string }, enabled: string[]) => app.inject({ method: 'PUT', url: '/api/cloudflare/accounts', headers: h, payload: { enabled } });
+  const status = async (h: { cookie: string }) => (await app.inject({ url: '/api/cloudflare/status', headers: h })).json();
+
+  it('limits tunnels and creation to the active accounts', async () => {
+    const h = await setupAdmin();
+    cf.state.addSecondAccount();
+    await connect(h);
+    expect((await status(h)).accounts.map((a: { enabled: boolean }) => a.enabled)).toEqual([true, true]);
+    await app.inject({ method: 'POST', url: '/api/tunnels', headers: h, payload: { name: 'home', accountId: FAKE_ACCOUNT.id } });
+    expect((await put(h, [SECOND_ACCOUNT.id])).statusCode).toBe(409);
+    expect((await put(h, [SECOND_ACCOUNT.id])).json()).toMatchObject({ code: 'ACCOUNT_IN_USE', details: { accounts: ['Home Lab'] } });
+    expect((await put(h, [FAKE_ACCOUNT.id])).statusCode).toBe(200);
+    const s = await status(h);
+    expect(s.accounts.map((a: { name: string; enabled: boolean }) => [a.name, a.enabled])).toEqual([['Home Lab', true], ['Second Org', false]]);
+    const created = await app.inject({ method: 'POST', url: '/api/tunnels', headers: h, payload: { name: 'x', accountId: SECOND_ACCOUNT.id } });
+    expect(created.json().code).toBe('ACCOUNT_NOT_FOUND');
+    // With one active account, it is used without asking.
+    expect((await app.inject({ method: 'POST', url: '/api/tunnels', headers: h, payload: { name: 'y' } })).statusCode).toBe(201);
+  });
+  it('validates the selection', async () => {
+    const h = await setupAdmin();
+    await connect(h);
+    expect((await put(h, [])).json().code).toBe('VALIDATION_ERROR');
+    expect((await put(h, ['c'.repeat(32)])).json().code).toBe('ACCOUNT_NOT_FOUND');
+  });
+  it('starts accounts the token reaches later as inactive once a selection exists', async () => {
+    const h = await setupAdmin();
+    await connect(h);
+    await put(h, [FAKE_ACCOUNT.id]);
+    cf.state.addSecondAccount();
+    await connect(h);
+    expect((await status(h)).accounts.map((a: { name: string; enabled: boolean }) => [a.name, a.enabled])).toEqual([['Home Lab', true], ['Second Org', false]]);
+  });
+  it('keeps an active account that a replacement token temporarily does not reach', async () => {
+    const h = await setupAdmin();
+    cf.state.addSecondAccount();
+    await connect(h);
+    await put(h, [FAKE_ACCOUNT.id, SECOND_ACCOUNT.id]);
+    const saved = { accounts: [...cf.state.accounts], zones: [...cf.state.zones] };
+    cf.state.accounts = [FAKE_ACCOUNT];
+    cf.state.zones = cf.state.zones.filter((z) => z.account.id === FAKE_ACCOUNT.id);
+    await connect(h);
+    Object.assign(cf.state, saved);
+    await connect(h);
+    expect((await status(h)).accounts.map((a: { name: string; enabled: boolean }) => [a.name, a.enabled])).toEqual([['Home Lab', true], ['Second Org', true]]);
+  });
+  it('resets the selection when a new token reaches none of the active accounts', async () => {
+    const h = await setupAdmin();
+    cf.state.addSecondAccount();
+    await connect(h);
+    await put(h, [SECOND_ACCOUNT.id]);
+    cf.state.accounts = [FAKE_ACCOUNT];
+    cf.state.zones = cf.state.zones.filter((z) => z.account.id === FAKE_ACCOUNT.id);
+    await connect(h);
+    expect((await status(h)).accounts.map((a: { name: string; enabled: boolean }) => [a.name, a.enabled])).toEqual([['Home Lab', true]]);
   });
 });
 
@@ -149,7 +218,34 @@ describe('tunnels API', () => {
     expect((await app.inject({ url: `/api/tunnels/${id}/events`, headers: h })).json()[0].type).toBe('stopped');
     expect((await app.inject({ url: `/api/tunnels/${id}/logs`, headers: h })).json().length).toBeGreaterThan(0);
     expect((await app.inject({ method: 'DELETE', url: `/api/tunnels/${id}`, headers: h })).statusCode).toBe(204);
-    expect((await app.inject({ url: '/api/tunnels', headers: h })).json()).toEqual([]);
+    expect((await app.inject({ url: '/api/tunnels', headers: h })).json()).toEqual({ tunnels: [], unavailableAccounts: [] });
+  });
+  it('creates tunnels in a chosen account and remembers it', async () => {
+    const h = await setupAdmin();
+    cf.state.addSecondAccount();
+    await connect(h);
+    const post = (payload: object) => app.inject({ method: 'POST', url: '/api/tunnels', headers: h, payload });
+    expect((await post({ name: 'x' })).json().code).toBe('ACCOUNT_SELECTION_REQUIRED');
+    expect((await post({ name: 'x', accountId: 'nope' })).json().code).toBe('VALIDATION_ERROR');
+    expect((await post({ name: 'x', accountId: 'c'.repeat(32) })).json().code).toBe('ACCOUNT_NOT_FOUND');
+    const created = await post({ name: 'work', accountId: SECOND_ACCOUNT.id });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().account).toEqual({ id: SECOND_ACCOUNT.id, name: 'Second Org' });
+    expect((await app.inject({ url: '/api/cloudflare/status', headers: h })).json().lastAccountId).toBe(SECOND_ACCOUNT.id);
+    const list = (await app.inject({ url: '/api/tunnels', headers: h })).json();
+    expect(list.tunnels.map((t: { name: string }) => t.name)).toEqual(['work']);
+  });
+  it('keeps a single-account install working after the upgrade', async () => {
+    // Settings as v0.2.0 wrote them: the token plus the account chosen at setup.
+    await app.close();
+    const settings = new SettingsRepo(openDatabase(join(dir, 'data.db')), loadOrCreateKey(join(dir, 'etc', 'secret.key')));
+    settings.setCloudflare({ token: cf.token });
+    settings.set('cf_account_id', FAKE_ACCOUNT.id);
+    settings.set('cf_account_name', 'Home Lab');
+    app = await makeApp();
+    const h = await setupAdmin();
+    expect((await app.inject('/api/setup/status')).json()).toEqual({ adminCreated: true, cloudflareConnected: true });
+    expect((await app.inject({ method: 'POST', url: '/api/tunnels', headers: h, payload: { name: 'home' } })).json().account.name).toBe('Home Lab');
   });
   it('validates ids and bodies', async () => {
     const h = await setupAdmin();
@@ -186,12 +282,15 @@ describe('tunnels API', () => {
     await connect(h);
     const id = (await app.inject({ method: 'POST', url: '/api/tunnels', headers: h, payload: { name: 'home' } })).json().id;
     const b = await app.inject({ url: '/api/backup', headers: h });
-    expect(b.json().tunnels).toHaveLength(1);
+    expect(b.json().tunnels).toEqual([expect.objectContaining({ id, accountId: FAKE_ACCOUNT.id })]);
     expect(b.body).not.toContain(cf.token);
     const backup = b.json();
     backup.tunnels[0].toleranceMinutes = 9;
     expect((await app.inject({ method: 'POST', url: '/api/backup', headers: h, payload: backup })).statusCode).toBe(204);
     expect((await app.inject({ url: `/api/tunnels/${id}`, headers: h })).json().settings.toleranceMinutes).toBe(9);
+    // Backups written before accounts existed still import.
+    delete backup.tunnels[0].accountId;
+    expect((await app.inject({ method: 'POST', url: '/api/backup', headers: h, payload: backup })).statusCode).toBe(204);
   });
 });
 

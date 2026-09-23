@@ -4,16 +4,22 @@ import type { CfDnsRecord, CfTunnel, CfTunnelConfig } from '../src/cloudflare/ty
 
 export const FAKE_TOKEN = 'fake-token-0123456789abcdefghij';
 export const FAKE_ACCOUNT = { id: 'a'.repeat(32), name: 'Home Lab' };
+export const SECOND_ACCOUNT = { id: 'b'.repeat(32), name: 'Second Org' };
+export const SECOND_ZONE = { id: `${'y'.repeat(31)}3`, name: 'second.net', status: 'active', account: SECOND_ACCOUNT };
 
 type CfErr = { code: number; message: string };
-interface TunnelEntry { tunnel: CfTunnel; config: CfTunnelConfig; version: number; token: string }
+interface TunnelEntry { accountId: string; tunnel: CfTunnel; config: CfTunnelConfig; version: number; token: string }
 export interface FakeState {
   accounts: { id: string; name: string }[];
   zones: { id: string; name: string; status: string; account: { id: string; name: string } }[];
   tunnels: Map<string, TunnelEntry>;
   dns: Map<string, CfDnsRecord[]>;
   failures: { re: RegExp; method?: string; status: number; errors: CfErr[] }[];
+  /** "METHOD /path" of every authenticated request, in order. */
+  requests: string[];
   failNext(re: RegExp, status: number, errors?: CfErr[], method?: string): void;
+  /** Adds "Second Org" with the zone second.net, reachable by the same token. */
+  addSecondAccount(): void;
 }
 
 /** In-memory stand-in for the subset of the Cloudflare API the app uses. */
@@ -27,8 +33,14 @@ export async function startFakeCloudflare(opts: { port?: number } = {}) {
     tunnels: new Map(),
     dns: new Map(),
     failures: [],
+    requests: [],
     failNext(re, status, errors = [{ code: 1000, message: 'injected' }], method) {
       this.failures.push({ re, status, errors, method });
+    },
+    addSecondAccount() {
+      this.accounts.push(SECOND_ACCOUNT);
+      this.zones.push(SECOND_ZONE);
+      this.dns.set(SECOND_ZONE.id, []);
     },
   };
   for (const z of state.zones) state.dns.set(z.id, []);
@@ -42,6 +54,7 @@ export async function startFakeCloudflare(opts: { port?: number } = {}) {
   app.addHook('onRequest', async (req, reply) => {
     if (req.headers.authorization !== `Bearer ${FAKE_TOKEN}`) return fail(reply, 401, [{ code: 10000, message: 'Authentication error' }]);
     const path = req.url.split('?')[0]!;
+    state.requests.push(`${req.method} ${path}`);
     const i = state.failures.findIndex((f) => f.re.test(path) && (!f.method || f.method === req.method));
     if (i >= 0) {
       const f = state.failures.splice(i, 1)[0]!;
@@ -49,16 +62,21 @@ export async function startFakeCloudflare(opts: { port?: number } = {}) {
     }
   });
 
-  const entry = (id: string, reply: FastifyReply) => {
+  // Tunnels are scoped to their account: another account's id answers like a missing tunnel.
+  const find = (p: unknown) => {
+    const { a, id } = p as { a: string; id: string };
     const e = state.tunnels.get(id);
+    return e && e.accountId === a ? e : undefined;
+  };
+  const entry = (p: unknown, reply: FastifyReply) => {
+    const e = find(p);
     if (!e || e.tunnel.deleted_at) {
       fail(reply, 404, [{ code: 1003, message: 'Tunnel not found' }]);
       return null;
     }
     return e;
   };
-  const idOf = (p: unknown) => (p as { id: string }).id;
-
+  
   app.get('/user/tokens/verify', async () => ok({ id: 't1', status: 'active' }));
   app.get('/accounts', async () => page(state.accounts));
   app.get('/zones', async (req) => {
@@ -66,51 +84,54 @@ export async function startFakeCloudflare(opts: { port?: number } = {}) {
     return page(state.zones.filter((z) => !accountId || z.account.id === accountId));
   });
 
-  app.get('/accounts/:a/cfd_tunnel', async () => page([...state.tunnels.values()].filter((e) => !e.tunnel.deleted_at).map((e) => e.tunnel)));
+  app.get('/accounts/:a/cfd_tunnel', async (req) => {
+    const { a } = req.params as { a: string };
+    return page([...state.tunnels.values()].filter((e) => e.accountId === a && !e.tunnel.deleted_at).map((e) => e.tunnel));
+  });
   app.post('/accounts/:a/cfd_tunnel', async (req) => {
     const { name, config_src } = req.body as { name: string; config_src: 'cloudflare' | 'local' };
     const id = randomUUID();
     const tunnel: CfTunnel = { id, name, created_at: new Date().toISOString(), deleted_at: null, status: 'inactive', config_src, connections: [] };
-    state.tunnels.set(id, { tunnel, config: { ingress: [{ service: 'http_status:404' }] }, version: 0, token: `tok-${id}` });
+    state.tunnels.set(id, { accountId: (req.params as { a: string }).a, tunnel, config: { ingress: [{ service: 'http_status:404' }] }, version: 0, token: `tok-${id}` });
     return ok(tunnel);
   });
   // Like the real API, a deleted tunnel is still returned by id, with deleted_at set.
   app.get('/accounts/:a/cfd_tunnel/:id', async (req, reply) => {
-    const e = state.tunnels.get(idOf(req.params));
+    const e = find(req.params);
     if (!e) return fail(reply, 404, [{ code: 1003, message: 'Tunnel not found' }]);
     return ok(e.tunnel);
   });
   app.patch('/accounts/:a/cfd_tunnel/:id', async (req, reply) => {
-    const e = entry(idOf(req.params), reply);
+    const e = entry(req.params, reply);
     if (!e) return;
     e.tunnel.name = (req.body as { name: string }).name;
     return ok(e.tunnel);
   });
   app.delete('/accounts/:a/cfd_tunnel/:id', async (req, reply) => {
-    const e = entry(idOf(req.params), reply);
+    const e = entry(req.params, reply);
     if (!e) return;
     if (e.tunnel.connections.length) return fail(reply, 400, [{ code: 1022, message: 'Cannot delete tunnel with active connections' }]);
     e.tunnel.deleted_at = new Date().toISOString();
     return ok(e.tunnel);
   });
   app.delete('/accounts/:a/cfd_tunnel/:id/connections', async (req, reply) => {
-    const e = entry(idOf(req.params), reply);
+    const e = entry(req.params, reply);
     if (!e) return;
     e.tunnel.connections = [];
     e.tunnel.status = 'inactive';
     return ok(null);
   });
   app.get('/accounts/:a/cfd_tunnel/:id/token', async (req, reply) => {
-    const e = entry(idOf(req.params), reply);
+    const e = entry(req.params, reply);
     return e && ok(e.token);
   });
   app.get('/accounts/:a/cfd_tunnel/:id/configurations', async (req, reply) => {
-    const e = state.tunnels.get(idOf(req.params));
+    const e = find(req.params);
     if (!e) return fail(reply, 404, [{ code: 1003, message: 'Tunnel not found' }]);
     return ok({ tunnel_id: e.tunnel.id, version: e.version, config: e.config, source: 'cloudflare' });
   });
   app.put('/accounts/:a/cfd_tunnel/:id/configurations', async (req, reply) => {
-    const e = entry(idOf(req.params), reply);
+    const e = entry(req.params, reply);
     if (!e) return;
     e.config = (req.body as { config: CfTunnelConfig }).config;
     e.version += 1;

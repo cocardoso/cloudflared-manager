@@ -14,12 +14,14 @@ Run before each release, for both deployment targets. Record the observed result
 
 - [ ] Create the admin; a short password is rejected.
 - [ ] The "Create token in Cloudflare" button opens the dashboard with the 3 permissions filled in.
-- [ ] Paste the token; with several accounts, the account picker appears; the correct domains are listed.
+- [ ] Paste the token; "Connected to N accounts" lists every account; with several accounts a checkbox per account (all checked) lets you save the active ones.
+- [ ] Settings lists every account with its domains; unchecking an account with tunnels running here is refused; unchecking another one hides it from the dashboard and the create dialog.
 
 ## Tunnels
 
 - [ ] Create a tunnel; `systemctl status cloudflared@<id>` is active; the Zero Trust dashboard shows the tunnel as "Healthy".
 - [ ] Add a hostname in each of two domains; external access works; the CNAME appears in each domain's DNS.
+- [ ] With a token reaching several accounts: create a tunnel in each; the dashboard shows the Account column and filter; each tunnel's hostname dialog only offers its account's domains; external access works for both.
 - [ ] Add a hostname that already has an A record: the UI asks for confirmation before replacing it.
 - [ ] Add a hostname that only has a TXT record: the TXT record is left untouched.
 - [ ] Edit the route in the Zero Trust dashboard while a dialog is open in the UI, then save: the version-conflict warning appears and nothing is overwritten.

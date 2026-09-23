@@ -3,6 +3,8 @@ import type { Db } from '../db/database';
 
 export interface TunnelRow {
   id: string;
+  /** Null only for rows the migration could not attribute; resolved on first use. */
+  accountId: string | null;
   metricsPort: number;
   keepAlive: boolean;
   toleranceMinutes: number;
@@ -15,12 +17,13 @@ export interface TunnelRow {
 }
 
 interface Raw {
-  id: string; metrics_port: number; keep_alive: number; tolerance_minutes: number; log_level: string; protocol: string;
+  id: string; account_id: string | null; metrics_port: number; keep_alive: number; tolerance_minutes: number; log_level: string; protocol: string;
   watchdog_state: string; degraded_since: number | null; restart_attempts: number; next_restart_at: number | null;
 }
 
 const toRow = (r: Raw): TunnelRow => ({
   id: r.id,
+  accountId: r.account_id,
   metricsPort: r.metrics_port,
   keepAlive: !!r.keep_alive,
   toleranceMinutes: r.tolerance_minutes,
@@ -33,7 +36,7 @@ const toRow = (r: Raw): TunnelRow => ({
 });
 
 const COLS: Record<keyof Omit<TunnelRow, 'id'>, string> = {
-  metricsPort: 'metrics_port', keepAlive: 'keep_alive', toleranceMinutes: 'tolerance_minutes', logLevel: 'log_level',
+  accountId: 'account_id', metricsPort: 'metrics_port', keepAlive: 'keep_alive', toleranceMinutes: 'tolerance_minutes', logLevel: 'log_level',
   protocol: 'protocol', watchdogState: 'watchdog_state', degradedSince: 'degraded_since', restartAttempts: 'restart_attempts',
   nextRestartAt: 'next_restart_at',
 };
@@ -56,8 +59,8 @@ export class TunnelRepo {
     return Math.max(20241, (r.m ?? 20240) + 1);
   }
 
-  insert(id: string, metricsPort: number) {
-    this.db.prepare('insert into tunnels (id, metrics_port) values (?, ?)').run(id, metricsPort);
+  insert(id: string, metricsPort: number, accountId: string) {
+    this.db.prepare('insert into tunnels (id, metrics_port, account_id) values (?, ?, ?)').run(id, metricsPort, accountId);
     return this.get(id)!;
   }
 

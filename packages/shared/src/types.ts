@@ -1,3 +1,4 @@
+import type { ErrorCode } from './errors';
 import type { LogLevel, Protocol, Route } from './schemas';
 
 export type LocalState = 'active' | 'inactive' | 'failed' | 'activating' | 'not-installed';
@@ -10,8 +11,12 @@ export interface TunnelSettings {
 
 export interface EdgeConnection { coloName: string; openedAt: string; originIp: string; clientVersion: string }
 
+export interface AccountRef { id: string; name: string }
+
 export interface TunnelSummary {
   id: string; name: string; createdAt: string;
+  /** The Cloudflare account that owns the tunnel. */
+  account: AccountRef;
   /** config_src === 'cloudflare' */
   remote: boolean;
   /** Has a unit/env file on this host. */
@@ -27,6 +32,10 @@ export interface TunnelSummary {
 
 export interface TunnelDetail extends TunnelSummary { routes: Route[]; configVersion: number }
 
+/** An account whose tunnels could not be listed (e.g. the token lacks Tunnel permission there). */
+export interface UnavailableAccount extends AccountRef { code: ErrorCode }
+export interface TunnelList { tunnels: TunnelSummary[]; unavailableAccounts: UnavailableAccount[] }
+
 export type EventType =
   | 'created' | 'deleted' | 'adopted' | 'started' | 'stopped' | 'restarted' | 'config-changed'
   | 'watchdog-degraded' | 'watchdog-restart' | 'watchdog-recovered' | 'watchdog-failing' | 'no-connectivity'
@@ -37,7 +46,17 @@ export interface TunnelEvent {
 }
 
 export interface Zone { id: string; name: string }
-export interface CloudflareStatus { connected: boolean; accountId: string | null; accountName: string | null; tokenSuffix: string | null; zones: Zone[] }
+export interface CloudflareAccount extends AccountRef {
+  zones: Zone[];
+  /** Active accounts are the ones the app lists tunnels from and creates tunnels in. */
+  enabled: boolean;
+}
+export interface CloudflareStatus {
+  connected: boolean; tokenSuffix: string | null;
+  /** Account of the most recently created tunnel, preselected for the next one. */
+  lastAccountId: string | null;
+  accounts: CloudflareAccount[];
+}
 export interface SetupStatus { adminCreated: boolean; cloudflareConnected: boolean }
 export interface MetricsPoint { t: number; requests: number; errors: number }
 export interface MetricsSnapshot { points: MetricsPoint[]; haConnections: number | null }

@@ -9,12 +9,18 @@ import { RoutesTab } from './routes-tab';
 
 const ID = '6ff42ae2-765d-4adf-8112-31c55c1551ef';
 const tunnel: TunnelDetail = {
-  id: ID, name: 'home', createdAt: '', remote: true, managedHere: true, edgeStatus: 'healthy', connections: [],
+  id: ID, name: 'home', account: { id: 'a'.repeat(32), name: 'Home Lab' }, createdAt: '', remote: true, managedHere: true, edgeStatus: 'healthy', connections: [],
   local: 'active', activeSince: null, watchdog: 'healthy', routeCount: 1,
   settings: { keepAlive: true, toleranceMinutes: 2, logLevel: 'info', protocol: 'auto', metricsPort: 20241 },
   routes: [{ hostname: 'ha.example.com', service: 'http://10.0.0.5:8123' }], configVersion: 4,
 };
-const cfStatus = { connected: true, accountId: 'a', accountName: 'Home', tokenSuffix: 'abcd', zones: [{ id: 'z1', name: 'example.com' }, { id: 'z2', name: 'other.dev' }] };
+const cfStatus = {
+  connected: true, tokenSuffix: 'abcd', lastAccountId: null,
+  accounts: [
+    { id: 'a'.repeat(32), name: 'Home Lab', zones: [{ id: 'z1', name: 'example.com' }, { id: 'z2', name: 'other.dev' }] },
+    { id: 'b'.repeat(32), name: 'Second Org', zones: [{ id: 'z3', name: 'second.net' }] },
+  ],
+};
 
 beforeEach(async () => {
   vi.restoreAllMocks();
@@ -22,6 +28,15 @@ beforeEach(async () => {
 });
 
 describe('RoutesTab', () => {
+  it("offers only the domains of the tunnel's account", async () => {
+    mockApi({ 'GET /api/cloudflare/status': () => json(cfStatus) });
+    renderWithProviders(<RoutesTab tunnel={{ ...tunnel, account: { id: 'b'.repeat(32), name: 'Second Org' }, routes: [] }} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Add public hostname' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('combobox', { name: 'Domain' }));
+    expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['second.net']);
+  });
+
   it('lists routes above the catch-all rule', async () => {
     mockApi({ 'GET /api/cloudflare/status': () => json(cfStatus) });
     renderWithProviders(<RoutesTab tunnel={tunnel} />);

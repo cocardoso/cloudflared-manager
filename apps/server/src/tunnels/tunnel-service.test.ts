@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { FAKE_ACCOUNT, SECOND_ACCOUNT, SECOND_ZONE } from '../../test/fake-cloudflare';
 import { makeTunnelEnv } from '../../test/helpers';
 
 let env: Awaited<ReturnType<typeof makeTunnelEnv>>;
@@ -22,17 +23,17 @@ describe('create / list', () => {
     expect(env.cf.state.tunnels.get(t.id)!.tunnel.config_src).toBe('cloudflare');
     const second = await env.service.create('lab');
     expect(second.settings?.metricsPort).toBe(20242);
-    expect((await env.service.list()).map((x) => x.name)).toEqual(['home', 'lab']);
+    expect((await env.service.list()).tunnels.map((x) => x.name)).toEqual(['home', 'lab']);
   });
   it('lists unmanaged remote tunnels with managedHere=false', async () => {
     const t = await env.api.createTunnel('elsewhere');
-    const [s] = await env.service.list();
+    const [s] = (await env.service.list()).tunnels;
     expect(s).toMatchObject({ id: t.id, managedHere: false, local: 'not-installed', settings: null, watchdog: 'disabled' });
   });
   it('lists tunnels deleted in the dashboard as ghosts', async () => {
     const t = await env.service.create('home');
     env.cf.state.tunnels.get(t.id)!.tunnel.deleted_at = 'x';
-    const [s] = await env.service.list();
+    const [s] = (await env.service.list()).tunnels;
     expect(s).toMatchObject({ id: t.id, edgeStatus: 'down', name: '(deleted in Cloudflare)' });
   });
 });
@@ -202,5 +203,186 @@ describe('update settings', () => {
     env.tunnels.update(t.id, { watchdogState: 'failing', restartAttempts: 5 });
     await env.service.start(t.id);
     expect(env.tunnels.get(t.id)).toMatchObject({ watchdogState: 'healthy', restartAttempts: 0 });
+  });
+});
+
+describe('several accounts', () => {
+  let multi: Awaited<ReturnType<typeof makeTunnelEnv>>;
+  beforeEach(async () => {
+    multi = await makeTunnelEnv({ second: true });
+  });
+  afterEach(() => multi.cf.close());
+  const home = { id: FAKE_ACCOUNT.id, name: 'Home Lab' };
+  const second = { id: SECOND_ACCOUNT.id, name: 'Second Org' };
+
+  it('creates each tunnel in the chosen account and lists them all', async () => {
+    const a = await multi.service.create('a', FAKE_ACCOUNT.id);
+    const b = await multi.service.create('b', SECOND_ACCOUNT.id);
+    expect(b.account).toEqual(second);
+    expect(multi.cf.state.tunnels.get(b.id)!.accountId).toBe(SECOND_ACCOUNT.id);
+    expect(multi.tunnels.get(b.id)!.accountId).toBe(SECOND_ACCOUNT.id);
+    expect(multi.used).toEqual([FAKE_ACCOUNT.id, SECOND_ACCOUNT.id]);
+    const list = await multi.service.list();
+    expect(list.unavailableAccounts).toEqual([]);
+    expect(list.tunnels.map((t) => [t.name, t.account])).toEqual([['a', home], ['b', second]]);
+    expect(a.account).toEqual(home);
+  });
+  it('requires an account when the token reaches several, and uses the only one otherwise', async () => {
+    await expect(multi.service.create('x')).rejects.toMatchObject({ code: 'ACCOUNT_SELECTION_REQUIRED', status: 400 });
+    await expect(multi.service.create('x', 'c'.repeat(32))).rejects.toMatchObject({ code: 'ACCOUNT_NOT_FOUND' });
+    expect((await env.service.create('solo')).account).toEqual(home);
+  });
+  it('keeps listing the other accounts when one fails', async () => {
+    const b = await multi.service.create('b', SECOND_ACCOUNT.id);
+    await multi.service.create('a', FAKE_ACCOUNT.id);
+    multi.cf.state.failNext(new RegExp(`/accounts/${SECOND_ACCOUNT.id}/cfd_tunnel$`), 403, [{ code: 10000, message: 'Authentication error' }]);
+    const list = await multi.service.list();
+    expect(list.unavailableAccounts).toEqual([{ ...second, code: 'CF_PERMISSION_MISSING' }]);
+    // The Second Org tunnel is unknown right now, not deleted.
+    expect(list.tunnels.map((t) => t.name)).toEqual(['a']);
+    expect(list.tunnels.some((t) => t.id === b.id)).toBe(false);
+  });
+  it("rejects hostnames outside the tunnel's account before writing anything", async () => {
+    const b = await multi.service.create('b', SECOND_ACCOUNT.id);
+    await expect(multi.service.updateRoutes(b.id, upd(0, [route('ha.example.com')]))).rejects.toMatchObject({
+      code: 'ZONE_NOT_FOUND', details: { hostnames: ['ha.example.com'] },
+    });
+    expect(multi.cf.state.tunnels.get(b.id)!.version).toBe(0);
+    expect(multi.cf.state.dns.get(multi.cf.state.zones[0]!.id)).toEqual([]);
+    const d = await multi.service.updateRoutes(b.id, upd(0, [route('ha.second.net')]));
+    expect(d.routes.map((r) => r.hostname)).toEqual(['ha.second.net']);
+    expect(multi.cf.state.dns.get(SECOND_ZONE.id)!.map((r) => r.name)).toEqual(['ha.second.net']);
+  });
+  it('finds an unmanaged tunnel of another account without a prior list', async () => {
+    const t = await multi.api2.createTunnel('elsewhere');
+    const fresh = multi.makeService();
+    expect((await fresh.get(t.id)).account).toEqual(second);
+    await expect(fresh.get('00000000-0000-4000-8000-000000000000')).rejects.toMatchObject({ code: 'TUNNEL_NOT_FOUND' });
+    expect((await fresh.adopt(t.id)).managedHere).toBe(true);
+    expect(multi.tunnels.get(t.id)!.accountId).toBe(SECOND_ACCOUNT.id);
+  });
+  it('writes back the account of a row the migration could not attribute', async () => {
+    const t = await multi.service.create('b', SECOND_ACCOUNT.id);
+    multi.db.prepare('update tunnels set account_id = null').run();
+    expect((await multi.makeService().get(t.id)).account).toEqual(second);
+    expect(multi.tunnels.get(t.id)!.accountId).toBe(SECOND_ACCOUNT.id);
+  });
+  it("deletes a tunnel and its DNS in the tunnel's account", async () => {
+    const b = await multi.service.create('b', SECOND_ACCOUNT.id);
+    await multi.service.updateRoutes(b.id, upd(0, [route('ha.second.net')]));
+    await multi.service.delete(b.id);
+    expect(multi.cf.state.dns.get(SECOND_ZONE.id)).toEqual([]);
+    expect(multi.cf.state.tunnels.get(b.id)!.tunnel.deleted_at).toBeTruthy();
+    expect(multi.tunnels.get(b.id)).toBeNull();
+  });
+});
+
+describe('review fixes', () => {
+  let multi: Awaited<ReturnType<typeof makeTunnelEnv>>;
+  beforeEach(async () => {
+    multi = await makeTunnelEnv({ second: true });
+  });
+  afterEach(() => multi.cf.close());
+  const dropSecondAccount = () => {
+    multi.cf.state.accounts = multi.cf.state.accounts.filter((a) => a.id !== SECOND_ACCOUNT.id);
+    multi.cf.state.zones = multi.cf.state.zones.filter((z) => z.account.id !== SECOND_ACCOUNT.id);
+    multi.accounts.invalidate();
+  };
+
+  it('keeps showing, opening and deleting a tunnel whose account the token no longer reaches', async () => {
+    const b = await multi.service.create('b', SECOND_ACCOUNT.id);
+    dropSecondAccount();
+    const list = await multi.service.list();
+    // Named by the last name seen for the account.
+    expect(list.unavailableAccounts).toEqual([{ id: SECOND_ACCOUNT.id, name: 'Second Org', code: 'ACCOUNT_NOT_FOUND' }]);
+    expect(list.tunnels.find((t) => t.id === b.id)).toMatchObject({ managedHere: true, name: '(account not reachable)' });
+    expect((await multi.service.get(b.id)).name).toBe('(account not reachable)');
+    await multi.service.delete(b.id);
+    expect(multi.tunnels.get(b.id)).toBeNull();
+    expect(multi.backend.isInstalled(b.id)).toBe(false);
+  });
+  it('does not mistake a rate-limited account for "not in this account"', async () => {
+    const t = await multi.api2.createTunnel('elsewhere');
+    multi.cf.state.failNext(new RegExp(`/accounts/${SECOND_ACCOUNT.id}/cfd_tunnel/${t.id}$`), 429, [{ code: 971, message: 'Please wait' }]);
+    await expect(multi.makeService().get(t.id)).rejects.toMatchObject({ code: 'CF_RATE_LIMITED' });
+  });
+  it('still skips accounts that answer forbidden or bad request for a foreign tunnel id', async () => {
+    const t = await multi.api2.createTunnel('elsewhere');
+    multi.cf.state.failNext(new RegExp(`/accounts/${FAKE_ACCOUNT.id}/cfd_tunnel/${t.id}$`), 400, [{ code: 1001, message: 'Invalid tunnel' }]);
+    expect((await multi.makeService().get(t.id)).account.id).toBe(SECOND_ACCOUNT.id);
+  });
+  it('reuses route counts between polls instead of fetching every config each time', async () => {
+    const a = await multi.service.create('a', FAKE_ACCOUNT.id);
+    await multi.service.list();
+    const configs = () => multi.cf.state.requests.filter((r) => r === `GET /accounts/${FAKE_ACCOUNT.id}/cfd_tunnel/${a.id}/configurations`).length;
+    const before = configs();
+    await multi.service.list();
+    expect(configs()).toBe(before);
+    // A route change made here is reflected right away.
+    await multi.service.updateRoutes(a.id, upd(0, [route('ha.example.com')]));
+    expect((await multi.service.list()).tunnels.find((t) => t.id === a.id)!.routeCount).toBe(1);
+  });
+});
+
+describe('follow-ups', () => {
+  let multi: Awaited<ReturnType<typeof makeTunnelEnv>>;
+  beforeEach(async () => {
+    multi = await makeTunnelEnv({ second: true });
+  });
+  afterEach(() => multi.cf.close());
+
+  it('accepts a domain added in Cloudflare after the accounts were cached', async () => {
+    const b = await multi.service.create('b', SECOND_ACCOUNT.id);
+    const zone = { id: `${'x'.repeat(31)}4`, name: 'fresh.net', status: 'active', account: SECOND_ACCOUNT };
+    multi.cf.state.zones.push(zone);
+    multi.cf.state.dns.set(zone.id, []);
+    const d = await multi.service.updateRoutes(b.id, upd(0, [route('app.fresh.net')]));
+    expect(d.routes.map((r) => r.hostname)).toEqual(['app.fresh.net']);
+  });
+  it('names DNS records it could not remove because their zone is out of reach', async () => {
+    const b = await multi.service.create('b', SECOND_ACCOUNT.id);
+    await multi.service.updateRoutes(b.id, upd(0, [route('ha.second.net')]));
+    multi.cf.state.accounts = multi.cf.state.accounts.filter((a) => a.id !== SECOND_ACCOUNT.id);
+    multi.cf.state.zones = multi.cf.state.zones.filter((z) => z.account.id !== SECOND_ACCOUNT.id);
+    multi.accounts.invalidate();
+    await multi.service.delete(b.id);
+    expect(multi.events.list({ tunnelId: b.id, limit: 10 }).map((e) => e.message).join(' | ')).toContain('ha.second.net');
+  });
+});
+
+describe('inactive accounts', () => {
+  let multi: Awaited<ReturnType<typeof makeTunnelEnv>>;
+  let enabled: string[] | null;
+  beforeEach(async () => {
+    enabled = null;
+    multi = await makeTunnelEnv({ second: true, isEnabled: (id) => !enabled || enabled.includes(id) });
+  });
+  afterEach(() => multi.cf.close());
+
+  it('keeps tunnels running here visible and manageable when their account is inactive', async () => {
+    const b = await multi.service.create('b', SECOND_ACCOUNT.id);
+    await multi.service.updateRoutes(b.id, upd(0, [route('ha.second.net')]));
+    enabled = [FAKE_ACCOUNT.id];
+    const list = await multi.service.list();
+    expect(list.unavailableAccounts).toEqual([]);
+    expect(list.tunnels.map((t) => [t.name, t.account.name])).toEqual([['b', 'Second Org']]);
+    expect((await multi.service.get(b.id)).routes.map((r) => r.hostname)).toEqual(['ha.second.net']);
+    await multi.service.delete(b.id);
+    expect(multi.cf.state.tunnels.get(b.id)!.tunnel.deleted_at).toBeTruthy();
+    expect(multi.cf.state.dns.get(SECOND_ZONE.id)).toEqual([]);
+  });
+  it('does not list unmanaged tunnels of inactive accounts', async () => {
+    await multi.api2.createTunnel('elsewhere');
+    enabled = [FAKE_ACCOUNT.id];
+    expect((await multi.service.list()).tunnels).toEqual([]);
+  });
+  it('treats every account as active when none of the active ones is reachable anymore', async () => {
+    enabled = ['c'.repeat(32)];
+    expect((await multi.accounts.list()).map((a) => a.name)).toEqual(['Home Lab', 'Second Org']);
+  });
+  it('answers ZONE_NOT_FOUND even if refreshing the accounts fails', async () => {
+    const b = await multi.service.create('b', SECOND_ACCOUNT.id);
+    multi.cf.state.failNext(/^\/zones$/, 429, [{ code: 971, message: 'Please wait' }]);
+    await expect(multi.service.updateRoutes(b.id, upd(0, [route('typo.nowhere.net')]))).rejects.toMatchObject({ code: 'ZONE_NOT_FOUND' });
   });
 });

@@ -64,9 +64,9 @@
     "CF_RATE_LIMITED": "Cloudflare rate limit reached. Wait a minute and try again.",
     "CF_API_ERROR": "Cloudflare returned an error.",
     "CF_NOT_CONNECTED": "Connect your Cloudflare account first.",
-    "ACCOUNT_SELECTION_REQUIRED": "This token has access to several accounts. Choose one.",
+    "ACCOUNT_SELECTION_REQUIRED": "Choose the account for this tunnel.",
     "DNS_CONFLICT": "A DNS record already exists for this hostname.",
-    "ZONE_NOT_FOUND": "This hostname does not belong to any domain in your Cloudflare account.",
+    "ZONE_NOT_FOUND": "This hostname does not belong to any domain in this tunnel's Cloudflare account.",
     "CONFIG_VERSION_CONFLICT": "The routes were changed elsewhere (e.g. in the Cloudflare dashboard). Reload and try again.",
     "TUNNEL_NOT_FOUND": "Tunnel not found.",
     "TUNNEL_NOT_MANAGED": "This tunnel does not run on this host. Run it here first.",
@@ -79,9 +79,11 @@
     "RATE_LIMITED": "Too many attempts. Wait a minute.",
     "INTERNAL": "Unexpected error.",
     "DNS_RECORD_NOT_FOUND": "The DNS record no longer exists.",
-    "CF_PERMISSION_MISSING_ACCOUNT": "The token cannot use {{permission}} on account \"{{account}}\". Pick another account, or check that your role in that account includes Cloudflare Tunnel.",
+    "CF_PERMISSION_MISSING_ACCOUNT": "The token cannot use {{permission}} on account \"{{account}}\". Check that your role in that account includes Cloudflare Tunnel.",
     "cloudflareSaid": "Cloudflare: {{detail}}",
-    "CLOUDFLARED_UPDATE_UNSUPPORTED": "cloudflared is bundled in the Docker image and updated with each new image release. Pull the latest image and recreate the container to get it."
+    "CLOUDFLARED_UPDATE_UNSUPPORTED": "cloudflared is bundled in the Docker image and updated with each new image release. Pull the latest image and recreate the container to get it.",
+    "ACCOUNT_NOT_FOUND": "This Cloudflare account is not reachable with the current token.",
+    "ACCOUNT_IN_USE": "Tunnels of {{accounts}} run on this host. Delete them before turning the account off."
   },
   "setup": {
     "title": "Welcome",
@@ -103,11 +105,11 @@
     "allZones": "Zone resources: All zones",
     "token": "API token",
     "connect": "Connect",
-    "chooseAccount": "Account",
-    "connected": "Connected to {{account}}",
-    "zonesFound_one": "{{count}} domain found",
-    "zonesFound_other": "{{count}} domains found",
-    "finish": "Go to dashboard"
+    "finish": "Go to dashboard",
+    "connectedAccounts_one": "Connected to {{count}} account",
+    "connectedAccounts_other": "Connected to {{count}} accounts",
+    "accountsSummary_one": "{{accounts}} · {{count}} domain",
+    "accountsSummary_other": "{{accounts}} · {{count}} domains"
   },
   "login": {
     "title": "Log in",
@@ -144,7 +146,12 @@
     "updateAvailable": "A new version of cloudflared is available ({{latest}}; installed {{installed}}).",
     "updateAction": "Update in Settings",
     "noMatch": "No tunnels match your search",
-    "updateActionImage": "How to update"
+    "updateActionImage": "How to update",
+    "account": "Account",
+    "allAccounts": "All accounts",
+    "createAccountHint": "The tunnel can only publish hostnames on domains of this account.",
+    "accountUnavailable": "Could not load tunnels from {{account}}: {{reason}}",
+    "accountsMissing": "Could not load your Cloudflare accounts. Try again in a moment."
   },
   "tunnel": {
     "tabs": {
@@ -244,7 +251,7 @@
   "settings": {
     "title": "Settings",
     "subtitle": "Account, security and maintenance.",
-    "account": "Cloudflare account",
+    "account": "Cloudflare accounts",
     "tokenEnding": "Token ending in {{suffix}}",
     "replaceToken": "Replace token",
     "domains": "Domains",
@@ -269,7 +276,8 @@
     "import": "Import",
     "imported": "Backup imported",
     "backupHint": "Contains tunnel settings and DNS ownership. The Cloudflare token is never exported.",
-    "imageUpdateHint": "cloudflared is bundled in the Docker image and updated with each new image release. Pull the latest image and recreate the container to get it."
+    "imageUpdateHint": "cloudflared is bundled in the Docker image and updated with each new image release. Pull the latest image and recreate the container to get it.",
+    "noDomains": "No domains in this account"
   },
   "events": {
     "created": "Created",
@@ -290,5 +298,10 @@
     "routes": "{{added}} added, {{removed}} removed",
     "attempt": "Attempt {{n}} of {{max}}",
     "settings": "Settings updated"
+  },
+  "accounts": {
+    "hint": "Choose the accounts this app works with. Tunnels are listed and created only in the checked accounts.",
+    "save": "Save accounts",
+    "saved": "Accounts saved"
   }
 }

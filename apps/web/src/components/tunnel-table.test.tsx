@@ -4,11 +4,11 @@ import type { TunnelSummary } from '@tm/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../i18n';
 import { json, mockApi, renderWithProviders } from '../test/utils';
-import { summarize } from './summary-cards';
+import { SummaryCards, summarize } from './summary-cards';
 import { TunnelTable } from './tunnel-table';
 
 const base: TunnelSummary = {
-  id: '6ff42ae2-765d-4adf-8112-31c55c1551ef', name: 'home', createdAt: '', remote: true, managedHere: true, edgeStatus: 'healthy',
+  id: '6ff42ae2-765d-4adf-8112-31c55c1551ef', name: 'home', account: { id: 'a'.repeat(32), name: 'Home Lab' }, createdAt: '', remote: true, managedHere: true, edgeStatus: 'healthy',
   connections: [
     { coloName: 'gru01', openedAt: '', originIp: '', clientVersion: '' },
     { coloName: 'eze01', openedAt: '', originIp: '', clientVersion: '' },
@@ -25,9 +25,19 @@ beforeEach(async () => {
 });
 
 describe('summarize', () => {
-  it('buckets managed tunnels only', () => {
-    const s = summarize([base, { ...base, local: 'inactive' }, { ...base, watchdog: 'failing' }, { ...base, edgeStatus: 'degraded' }, foreign]);
-    expect(s).toEqual({ healthy: 1, degraded: 1, stopped: 1, failing: 1, routes: 12 });
+  it('buckets managed tunnels and counts the ones not on this host apart', () => {
+    const s = summarize([base, { ...base, local: 'inactive' }, { ...base, watchdog: 'failing' }, { ...base, edgeStatus: 'degraded' }, foreign, foreign]);
+    expect(s).toEqual({ healthy: 1, degraded: 1, stopped: 1, failing: 1, notHere: 2, routes: 12 });
+  });
+});
+
+describe('SummaryCards', () => {
+  it('shows a card with a warning icon for tunnels not on this host', () => {
+    renderWithProviders(<SummaryCards tunnels={[base, foreign]} />);
+    const card = screen.getByText('Not on this host').closest('[data-card]') as HTMLElement;
+    expect(card.getAttribute('data-card')).toBe('notHere');
+    expect(card.textContent).toContain('1');
+    expect(card.querySelector('svg')).toBeTruthy();
   });
 });
 

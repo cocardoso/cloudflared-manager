@@ -1,6 +1,6 @@
 import { AppError } from '../errors';
 import type { CfClient } from './client';
-import type { CfAccount, CfDnsRecord, CfTunnel, CfTunnelConfig, CfZone } from './types';
+import type { CfDnsRecord, CfTunnel, CfTunnelConfig, CfZone } from './types';
 
 export const MANAGED_COMMENT = 'managed by cloudflared-manager';
 
@@ -9,19 +9,6 @@ export class CfApi {
 
   static verifyToken(c: CfClient) {
     return c.request<{ status: string }>('GET', '/user/tokens/verify');
-  }
-
-  /**
-   * Accounts the token can act on. GET /accounts comes back empty for tokens without
-   * "Account Settings: Read", so accounts are also discovered from the zones the token can read.
-   */
-  static async listAccounts(c: CfClient): Promise<CfAccount[]> {
-    const listed = (await c.paginate<CfAccount>('/accounts?per_page=50')).map(({ id, name }) => ({ id, name }));
-    if (listed.length) return listed;
-    const zones = await c.paginate<CfZone>('/zones?per_page=50').catch(() => [] as CfZone[]);
-    const byId = new Map<string, CfAccount>();
-    for (const z of zones) if (z.account?.id) byId.set(z.account.id, { id: z.account.id, name: z.account.name });
-    return [...byId.values()];
   }
 
   private get t() {

@@ -15,7 +15,8 @@ type Snapshot = { version: number; routes: Route[] };
 
 export function RoutesTab({ tunnel, onReload }: { tunnel: TunnelDetail; onReload?: () => void }) {
   const { t } = useTranslation();
-  const zones = useCloudflareStatus().data?.zones ?? [];
+  // A tunnel only serves hostnames of zones in its own account.
+  const zones = useCloudflareStatus().data?.accounts.find((a) => a.id === tunnel.account.id)?.zones ?? [];
   const save = useSaveRoutes(tunnel.id);
   const toasts = Toast.useToastManager();
   const msg = useErrorMessage();

@@ -1,4 +1,5 @@
-import type { RoutesUpdate, TunnelDetail, TunnelSummary, UpdateTunnel } from '@tm/shared';
+import type { AccountRef, RoutesUpdate, TunnelDetail, TunnelList, TunnelSummary, UnavailableAccount, UpdateTunnel } from '@tm/shared';
+import type { AccountDirectory, AccountInfo } from '../cloudflare/account-directory';
 import type { CfApi } from '../cloudflare/api';
 import type { CfTunnel, CfZone } from '../cloudflare/types';
 import { AppError } from '../errors';
@@ -9,26 +10,74 @@ import { configToRoutes, diffHostnames, routesToConfig, tunnelTarget } from './i
 import type { TunnelRepo, TunnelRow } from './tunnel-repo';
 import { findZoneForHostname } from './zones';
 
-interface Deps { api: () => CfApi; backend: ServiceBackend; tunnels: TunnelRepo; dns: DnsRepo; events: EventRepo }
+interface Deps {
+  api: (accountId: string) => CfApi;
+  accounts: AccountDirectory;
+  backend: ServiceBackend;
+  tunnels: TunnelRepo;
+  dns: DnsRepo;
+  events: EventRepo;
+  /** Called with the account of each tunnel created here. */
+  onAccountUsed?: (accountId: string) => void;
+  /** Last known name of an account, for accounts the token no longer reaches. */
+  accountName?: (accountId: string) => string | undefined;
+}
 
 const ignore = (...codes: string[]) => (e: unknown) => {
   if (e instanceof AppError && codes.includes(e.code)) return;
   throw e;
 };
 
+const isCode = (e: unknown, code: string) => e instanceof AppError && e.code === code;
+const ref = (a: AccountInfo): AccountRef => ({ id: a.id, name: a.name });
+
 const ADDRESS_TYPES = new Set(['A', 'AAAA', 'CNAME']);
+
+/** Answers from an account that simply does not own the tunnel id; anything else (rate limit, outage) is a real error. */
+const NOT_IN_ACCOUNT = ['TUNNEL_NOT_FOUND', 'CF_PERMISSION_MISSING', 'CF_API_ERROR'];
+const ROUTE_COUNT_TTL_MS = 60_000;
+const UNREACHABLE = '(account not reachable)';
 
 const WATCHDOG_RESET = { watchdogState: 'healthy', restartAttempts: 0, degradedSince: null, nextRestartAt: null } as const;
 
-/** Orchestrates Cloudflare (source of truth for tunnels, routes and DNS) with the local service backend. */
+/**
+ * Orchestrates Cloudflare (source of truth for tunnels, routes and DNS) with the local service backend,
+ * across every account the token reaches.
+ */
 export class TunnelService {
+  /** Account of tunnels seen in a listing or lookup, so unmanaged ones need no scan. */
+  private known = new Map<string, string>();
+  /** Route counts shown in the list, so each poll does not re-read every tunnel's configuration. */
+  private counts = new Map<string, { count: number; at: number }>();
+
   constructor(private d: Deps) {}
 
-  private async summarize(t: CfTunnel, row: TunnelRow | null, routeCount: number): Promise<TunnelSummary> {
+  /** The local row's account, a remembered one, or a scan of every account. */
+  private async accountOf(id: string): Promise<AccountInfo> {
+    const row = this.d.tunnels.get(id);
+    const hint = row?.accountId ?? this.known.get(id);
+    if (hint) return this.d.accounts.getAny(hint);
+    for (const a of await this.d.accounts.list()) {
+      try {
+        await this.d.api(a.id).getTunnel(id);
+      } catch (e) {
+        // Another account's tunnel id answers as not found, forbidden or invalid: keep looking.
+        if (e instanceof AppError && NOT_IN_ACCOUNT.includes(e.code)) continue;
+        throw e;
+      }
+      this.known.set(id, a.id);
+      if (row) this.d.tunnels.update(id, { accountId: a.id });
+      return a;
+    }
+    throw new AppError('TUNNEL_NOT_FOUND', 'Tunnel not found in any account', 404);
+  }
+
+  private async summarize(t: CfTunnel, row: TunnelRow | null, routeCount: number, account: AccountRef): Promise<TunnelSummary> {
     const local = await this.d.backend.status(t.id);
     return {
       id: t.id,
       name: t.name,
+      account,
       createdAt: t.created_at,
       remote: t.config_src === 'cloudflare',
       managedHere: !!row && this.d.backend.isInstalled(t.id),
@@ -47,65 +96,134 @@ export class TunnelService {
   }
 
   /** Placeholder for a tunnel still installed here but deleted in the Cloudflare dashboard. */
-  private ghost(row: TunnelRow): CfTunnel {
-    return { id: row.id, name: '(deleted in Cloudflare)', created_at: '', deleted_at: null, status: 'down', config_src: 'cloudflare', connections: [] };
+  private ghost(row: TunnelRow, name = '(deleted in Cloudflare)'): CfTunnel {
+    return { id: row.id, name, created_at: '', deleted_at: null, status: 'down', config_src: 'cloudflare', connections: [] };
   }
 
-  async list(): Promise<TunnelSummary[]> {
-    const api = this.d.api();
-    const remote = await api.listTunnels();
+  async list(): Promise<TunnelList> {
+    const [active, all] = await Promise.all([this.d.accounts.list(), this.d.accounts.listAll()]);
     const rows = new Map(this.d.tunnels.list().map((r) => [r.id, r]));
-    const out = await Promise.all(
-      remote.map(async (t) => {
-        const row = rows.get(t.id) ?? null;
-        rows.delete(t.id);
-        const count = row && t.config_src === 'cloudflare' ? configToRoutes((await api.getConfig(t.id)).config).length : 0;
-        return this.summarize(t, row, count);
+    // Inactive accounts are still read for the tunnels that run on this host, so those never disappear.
+    const withRows = new Set([...rows.values()].map((r) => r.accountId));
+    const accounts = all.filter((a) => active.includes(a) || withRows.has(a.id));
+    const unavailable = new Map<string, UnavailableAccount>();
+    const listed = await Promise.all(
+      accounts.map(async (a) => {
+        try {
+          const remote = await this.d.api(a.id).listTunnels();
+          return { a, remote: active.includes(a) ? remote : remote.filter((t) => rows.has(t.id)) };
+        } catch (e) {
+          // One account the token cannot read must not hide the others.
+          if (!(e instanceof AppError)) throw e;
+          unavailable.set(a.id, { id: a.id, name: a.name, code: e.code });
+          return { a, remote: [] };
+        }
       }),
     );
-    for (const row of rows.values()) out.push(await this.summarize(this.ghost(row), row, 0));
-    return out.sort((a, b) => Number(b.managedHere) - Number(a.managedHere) || a.name.localeCompare(b.name));
+    const out = (
+      await Promise.all(
+        listed.flatMap(({ a, remote }) =>
+          remote.map(async (t) => {
+            this.known.set(t.id, a.id);
+            const row = rows.get(t.id) ?? null;
+            rows.delete(t.id);
+            if (row && row.accountId !== a.id) this.d.tunnels.update(t.id, { accountId: a.id });
+            const count = row && t.config_src === 'cloudflare' ? await this.routeCount(a.id, t.id) : 0;
+            return this.summarize(t, row, count, ref(a));
+          }),
+        ),
+      )
+    );
+    for (const row of rows.values()) {
+      const a = accounts.find((x) => x.id === row.accountId);
+      if (a && unavailable.has(a.id)) continue; // unknown right now, not deleted
+      if (!a && row.accountId) {
+        // The token no longer reaches this tunnel's account: keep it visible so it can still be stopped or removed.
+        const lost = this.lostAccount(row.accountId);
+        unavailable.set(row.accountId, { ...lost, code: 'ACCOUNT_NOT_FOUND' });
+        out.push(await this.summarize(this.ghost(row, UNREACHABLE), row, 0, lost));
+        continue;
+      }
+      out.push(await this.summarize(this.ghost(row), row, 0, a ? ref(a) : { id: '', name: '' }));
+    }
+    return {
+      tunnels: out.sort((a, b) => Number(b.managedHere) - Number(a.managedHere) || a.name.localeCompare(b.name)),
+      unavailableAccounts: [...unavailable.values()],
+    };
+  }
+
+  private lostAccount(id: string): AccountRef {
+    return { id, name: this.d.accountName?.(id) ?? id };
+  }
+
+  private async routeCount(accountId: string, id: string) {
+    const hit = this.counts.get(id);
+    if (hit && Date.now() - hit.at <= ROUTE_COUNT_TTL_MS) return hit.count;
+    const count = configToRoutes((await this.d.api(accountId).getConfig(id)).config).length;
+    this.counts.set(id, { count, at: Date.now() });
+    return count;
   }
 
   async get(id: string): Promise<TunnelDetail> {
-    const api = this.d.api();
     const row = this.d.tunnels.get(id);
+    const ghost = async (account: AccountRef, name?: string) =>
+      ({ ...(await this.summarize(this.ghost(row!, name), row, 0, account)), routes: [], configVersion: 0 });
+    let account: AccountInfo;
+    try {
+      account = await this.accountOf(id);
+    } catch (e) {
+      if (row && isCode(e, 'TUNNEL_NOT_FOUND')) return ghost({ id: '', name: '' });
+      if (row?.accountId && isCode(e, 'ACCOUNT_NOT_FOUND')) return ghost(this.lostAccount(row.accountId), UNREACHABLE);
+      throw e;
+    }
+    const api = this.d.api(account.id);
     let t: CfTunnel;
     try {
       t = await api.getTunnel(id);
     } catch (e) {
-      if (row && e instanceof AppError && e.code === 'TUNNEL_NOT_FOUND') {
-        return { ...(await this.summarize(this.ghost(row), row, 0)), routes: [], configVersion: 0 };
-      }
+      if (row && isCode(e, 'TUNNEL_NOT_FOUND')) return ghost(ref(account));
       throw e;
     }
     const { version, config } = t.config_src === 'cloudflare' ? await api.getConfig(id) : { version: 0, config: { ingress: [] } };
     const routes = configToRoutes(config);
-    return { ...(await this.summarize(t, row, routes.length)), routes, configVersion: version };
+    return { ...(await this.summarize(t, row, routes.length, ref(account))), routes, configVersion: version };
   }
 
   private envFor(row: TunnelRow, token: string): TunnelEnv {
     return { token, metricsPort: row.metricsPort, logLevel: row.logLevel, protocol: row.protocol };
   }
 
-  private async installAndStart(id: string) {
-    const token = await this.d.api().getTunnelToken(id);
-    const row = this.d.tunnels.get(id) ?? this.d.tunnels.insert(id, this.d.tunnels.nextMetricsPort());
+  private async installAndStart(id: string, accountId: string) {
+    const token = await this.d.api(accountId).getTunnelToken(id);
+    const row = this.d.tunnels.get(id) ?? this.d.tunnels.insert(id, this.d.tunnels.nextMetricsPort(), accountId);
     await this.d.backend.install(id, this.envFor(row, token));
     await this.d.backend.start(id);
   }
 
-  async create(name: string): Promise<TunnelSummary> {
-    const t = await this.d.api().createTunnel(name);
-    await this.installAndStart(t.id);
+  /** Without an account id, only a token that reaches a single account decides by itself. */
+  private async accountForCreate(accountId?: string) {
+    if (accountId) return this.d.accounts.get(accountId);
+    const all = await this.d.accounts.list();
+    if (all.length === 1) return all[0]!;
+    throw new AppError('ACCOUNT_SELECTION_REQUIRED', 'Choose the account for this tunnel', 400);
+  }
+
+  async create(name: string, accountId?: string): Promise<TunnelSummary> {
+    const account = await this.accountForCreate(accountId);
+    const api = this.d.api(account.id);
+    const t = await api.createTunnel(name);
+    this.known.set(t.id, account.id);
+    await this.installAndStart(t.id, account.id);
+    this.d.onAccountUsed?.(account.id);
     this.d.events.add(t.id, 'created', `Tunnel "${name}" created`);
-    return this.summarize(await this.d.api().getTunnel(t.id), this.d.tunnels.get(t.id), 0);
+    return this.summarize(await api.getTunnel(t.id), this.d.tunnels.get(t.id), 0, ref(account));
   }
 
   async adopt(id: string): Promise<TunnelSummary> {
-    const t = await this.d.api().getTunnel(id);
+    const account = await this.accountOf(id);
+    const t = await this.d.api(account.id).getTunnel(id);
     if (t.config_src !== 'cloudflare') throw new AppError('TUNNEL_NOT_REMOTE', 'Only remotely-managed tunnels can be adopted', 400);
-    await this.installAndStart(id);
+    await this.installAndStart(id, account.id);
     this.d.events.add(id, 'adopted', `Tunnel "${t.name}" adopted`);
     return this.get(id);
   }
@@ -118,7 +236,8 @@ export class TunnelService {
 
   async update(id: string, patch: UpdateTunnel): Promise<TunnelSummary> {
     const row = this.requireRow(id);
-    if (patch.name) await this.d.api().renameTunnel(id, patch.name);
+    const api = patch.name || patch.logLevel || patch.protocol ? this.d.api((await this.accountOf(id)).id) : null;
+    if (patch.name) await api!.renameTunnel(id, patch.name);
     const envChanged = (patch.logLevel && patch.logLevel !== row.logLevel) || (patch.protocol && patch.protocol !== row.protocol);
     this.d.tunnels.update(id, {
       keepAlive: patch.keepAlive,
@@ -128,7 +247,7 @@ export class TunnelService {
       ...(patch.keepAlive === true && !row.keepAlive ? WATCHDOG_RESET : {}),
     });
     if (envChanged) {
-      const token = await this.d.api().getTunnelToken(id);
+      const token = await api!.getTunnelToken(id);
       await this.d.backend.updateEnv(id, this.envFor(this.d.tunnels.get(id)!, token));
       if ((await this.d.backend.status(id)).state === 'active') await this.d.backend.restart(id);
     }
@@ -158,16 +277,30 @@ export class TunnelService {
 
   /** Idempotent: tolerates parts that were already removed elsewhere. */
   async delete(id: string) {
-    const api = this.d.api();
+    // A tunnel already gone from every account still gets its local parts cleaned up.
+    const account = await this.accountOf(id).catch((e) => {
+      if (isCode(e, 'TUNNEL_NOT_FOUND') || isCode(e, 'ACCOUNT_NOT_FOUND')) return null;
+      throw e;
+    });
+    const accounts = await this.d.accounts.list();
+    // DNS endpoints are zone-scoped, so any account's client can remove a record.
+    const api = this.d.api(account?.id ?? accounts[0]?.id ?? '');
     if (this.d.backend.isInstalled(id)) await this.d.backend.uninstall(id);
-    await api.cleanupConnections(id).catch(ignore('TUNNEL_NOT_FOUND', 'CF_API_ERROR'));
-    const zones = new Set((await api.listZones()).map((z) => z.id));
+    if (account) await api.cleanupConnections(id).catch(ignore('TUNNEL_NOT_FOUND', 'CF_API_ERROR'));
+    const zones = new Set((await this.d.accounts.listAll()).flatMap((a) => a.zones.map((z) => z.id)));
+    const leftBehind: string[] = [];
     for (const m of this.d.dns.byTunnel(id)) {
       // Any failure other than "already gone" aborts, leaving the tunnel in place so the delete can be retried.
       if (zones.has(m.zoneId)) await api.deleteDnsRecord(m.zoneId, m.recordId).catch(ignore('DNS_RECORD_NOT_FOUND'));
+      else leftBehind.push(m.hostname);
       this.d.dns.delete(m.recordId);
     }
-    await api.deleteTunnel(id).catch(ignore('TUNNEL_NOT_FOUND'));
+    if (leftBehind.length) {
+      this.d.events.add(id, 'config-changed', `DNS records left in Cloudflare (zone not reachable with this token): ${leftBehind.join(', ')}`);
+    }
+    if (account) await api.deleteTunnel(id).catch(ignore('TUNNEL_NOT_FOUND'));
+    this.known.delete(id);
+    this.counts.delete(id);
     this.d.tunnels.delete(id);
     this.d.events.add(id, 'deleted', 'Tunnel deleted');
   }
@@ -177,7 +310,8 @@ export class TunnelService {
    * then writes ingress, then DNS; a DNS failure rolls the ingress back.
    */
   async updateRoutes(id: string, input: RoutesUpdate): Promise<TunnelDetail> {
-    const api = this.d.api();
+    const account = await this.accountOf(id);
+    const api = this.d.api(account.id);
     const t = await api.getTunnel(id);
     if (t.config_src !== 'cloudflare') throw new AppError('TUNNEL_NOT_REMOTE', 'Tunnel uses local configuration', 400);
     const before = await api.getConfig(id);
@@ -185,15 +319,25 @@ export class TunnelService {
       throw new AppError('CONFIG_VERSION_CONFLICT', 'Configuration changed elsewhere', 409, { currentVersion: before.version });
     }
 
-    const zones = await api.listZones();
-    const zoneOf = new Map<string, CfZone>();
-    const missing: string[] = [];
-    for (const r of input.routes) {
-      const z = findZoneForHostname(r.hostname, zones);
-      if (z) zoneOf.set(r.hostname, z);
-      else if (!missing.includes(r.hostname)) missing.push(r.hostname);
+    // A tunnel only serves hostnames of zones in its own account.
+    const match = (zones: CfZone[]) => {
+      const zoneOf = new Map<string, CfZone>();
+      const missing: string[] = [];
+      for (const r of input.routes) {
+        const z = findZoneForHostname(r.hostname, zones);
+        if (z) zoneOf.set(r.hostname, z);
+        else if (!missing.includes(r.hostname)) missing.push(r.hostname);
+      }
+      return { zoneOf, missing };
+    };
+    let { zoneOf, missing } = match(account.zones);
+    if (missing.length) {
+      // The zone may have been added after the accounts were cached; a failed refresh keeps the first answer.
+      this.d.accounts.invalidate();
+      const fresh = await this.d.accounts.getAny(account.id).catch(() => null);
+      if (fresh) ({ zoneOf, missing } = match(fresh.zones));
     }
-    if (missing.length) throw new AppError('ZONE_NOT_FOUND', 'Hostname does not belong to any zone in this account', 400, { hostnames: missing });
+    if (missing.length) throw new AppError('ZONE_NOT_FOUND', "Hostname does not belong to a zone in this tunnel's account", 400, { hostnames: missing });
 
     const beforeRoutes = configToRoutes(before.config);
     const { added, removed } = diffHostnames(beforeRoutes, input.routes);
@@ -236,6 +380,7 @@ export class TunnelService {
       throw e;
     }
     for (const m of owned) this.d.dns.upsert(m);
+    this.counts.set(id, { count: input.routes.length, at: Date.now() });
 
     const failures: string[] = [];
     for (const hostname of removed) {
