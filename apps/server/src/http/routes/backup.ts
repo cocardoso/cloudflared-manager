@@ -8,6 +8,7 @@ export async function backupRoutes(app: FastifyInstance, ctx: AppContext) {
       version: 1,
       tunnels: ctx.tunnels.list().map((t) => ({
         id: t.id, keepAlive: t.keepAlive, toleranceMinutes: t.toleranceMinutes, logLevel: t.logLevel, protocol: t.protocol,
+        ...(t.accountId ? { accountId: t.accountId } : {}),
       })),
       managedDns: ctx.dns.all(),
     };
@@ -18,8 +19,13 @@ export async function backupRoutes(app: FastifyInstance, ctx: AppContext) {
   app.post('/backup', async (req, reply) => {
     const b = backupSchema.parse(req.body);
     for (const t of b.tunnels) {
-      if (ctx.tunnels.get(t.id)) {
-        ctx.tunnels.update(t.id, { keepAlive: t.keepAlive, toleranceMinutes: t.toleranceMinutes, logLevel: t.logLevel, protocol: t.protocol });
+      const row = ctx.tunnels.get(t.id);
+      if (row) {
+        ctx.tunnels.update(t.id, {
+          keepAlive: t.keepAlive, toleranceMinutes: t.toleranceMinutes, logLevel: t.logLevel, protocol: t.protocol,
+          // Never re-point a known tunnel; only fill in an account that was missing.
+          ...(!row.accountId && t.accountId ? { accountId: t.accountId } : {}),
+        });
       }
     }
     for (const m of b.managedDns) ctx.dns.upsert(m);

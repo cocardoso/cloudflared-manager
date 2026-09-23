@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { AdminRepo, SessionStore } from '../auth/sessions';
+import { AccountDirectory } from '../cloudflare/account-directory';
 import { CfApi } from '../cloudflare/api';
 import { CfClient } from '../cloudflare/client';
 import type { AppConfig } from '../config';
@@ -31,8 +32,10 @@ export interface AppContext {
   backend: ServiceBackend;
   sampler: MetricsSampler;
   cfClient(token: string): CfClient;
+  /** Every account the stored token reaches. */
+  accounts: AccountDirectory;
   /** Throws CF_NOT_CONNECTED until a token is stored. */
-  api(): CfApi;
+  api(accountId: string): CfApi;
   service: TunnelService;
   latestVersion: () => Promise<string | null>;
 }
@@ -53,25 +56,29 @@ export function createContext(
         : new SystemdBackend(config.etcDir));
   const cfClient = (token: string) => new CfClient({ token, baseUrl: config.cfApiBase });
 
-  let cached: { token: string; accountId: string; api: CfApi } | null = null;
-  const api = () => {
+  let cached: { client: CfClient; apis: Map<string, CfApi> } | null = null;
+  const current = () => {
     const c = settings.getCloudflare();
     if (!c) throw new AppError('CF_NOT_CONNECTED', 'Cloudflare account not connected', 409);
-    if (!cached || cached.token !== c.token || cached.accountId !== c.accountId) {
-      cached = { token: c.token, accountId: c.accountId, api: new CfApi(cfClient(c.token), c.accountId) };
-    }
-    return cached.api;
+    if (cached?.client.token !== c.token) cached = { client: cfClient(c.token), apis: new Map() };
+    return cached;
+  };
+  const accounts = new AccountDirectory(() => current().client);
+  const api = (accountId: string) => {
+    const { client, apis } = current();
+    if (!apis.has(accountId)) apis.set(accountId, new CfApi(client, accountId));
+    return apis.get(accountId)!;
   };
 
   const tunnels = new TunnelRepo(db);
   const dns = new DnsRepo(db);
   const events = new EventRepo(db);
   return {
-    config, db, settings, backend, tunnels, dns, events, cfClient, api,
+    config, db, settings, backend, tunnels, dns, events, cfClient, accounts, api,
     admin: new AdminRepo(db),
     sessions: new SessionStore(db),
     sampler: new MetricsSampler(),
-    service: new TunnelService({ api, backend, tunnels, dns, events }),
+    service: new TunnelService({ api, accounts, backend, tunnels, dns, events, onAccountUsed: (id) => settings.setLastAccountId(id) }),
     latestVersion: overrides.latestVersion ?? (() => latestCloudflaredVersion()),
   };
 }
