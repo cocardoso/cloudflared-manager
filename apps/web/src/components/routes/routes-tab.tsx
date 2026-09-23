@@ -10,6 +10,8 @@ import { RouteFormDialog } from './route-form-dialog';
 import { moveRoute } from './route-model';
 
 type Pending = { routes: Route[]; keepDns?: string[] };
+/** What a dialog was opened on; saves are built from it so a background refresh cannot shift indexes. */
+type Snapshot = { version: number; routes: Route[] };
 
 export function RoutesTab({ tunnel, onReload }: { tunnel: TunnelDetail; onReload?: () => void }) {
   const { t } = useTranslation();
@@ -21,15 +23,21 @@ export function RoutesTab({ tunnel, onReload }: { tunnel: TunnelDetail; onReload
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
-  const [conflict, setConflict] = useState<{ pending: Pending; hostnames: string[] } | null>(null);
+  const [conflict, setConflict] = useState<{ base: Snapshot; pending: Pending; hostnames: string[] } | null>(null);
   const [removing, setRemoving] = useState<number | null>(null);
   const [removeDns, setRemoveDns] = useState(true);
   const [error, setError] = useState<unknown>(null);
+  const [snapshot, setSnapshot] = useState<Snapshot>({ version: tunnel.configVersion, routes: tunnel.routes });
+  const current = (): Snapshot => ({ version: tunnel.configVersion, routes: tunnel.routes });
+  const openWith = (open: () => void) => {
+    setSnapshot(current());
+    open();
+  };
 
-  const persist = async (pending: Pending, overwriteDns: string[] = []) => {
+  const persist = async (base: Snapshot, pending: Pending, overwriteDns: string[] = []) => {
     setError(null);
     try {
-      await save.mutateAsync({ version: tunnel.configVersion, routes: pending.routes, overwriteDns, keepDns: pending.keepDns ?? [] });
+      await save.mutateAsync({ version: base.version, routes: pending.routes, overwriteDns, keepDns: pending.keepDns ?? [] });
       toasts.add({ title: t('routes.saved') });
       setFormOpen(false);
       setConflict(null);
@@ -37,7 +45,7 @@ export function RoutesTab({ tunnel, onReload }: { tunnel: TunnelDetail; onReload
       return true;
     } catch (e) {
       if (e instanceof ApiError && e.code === 'DNS_CONFLICT') {
-        setConflict({ pending, hostnames: (e.details as { hostnames: string[] }).hostnames });
+        setConflict({ base, pending, hostnames: (e.details as { hostnames: string[] }).hostnames });
       } else {
         setError(e);
         if (!(e instanceof ApiError && e.code === 'CONFIG_VERSION_CONFLICT')) toasts.add({ title: msg(e), type: 'error' });
@@ -47,21 +55,21 @@ export function RoutesTab({ tunnel, onReload }: { tunnel: TunnelDetail; onReload
   };
 
   const onSubmitRoute = (route: Route) => {
-    const routes = [...tunnel.routes];
+    const routes = [...snapshot.routes];
     if (editing === null) routes.push(route);
     else routes[editing] = route;
-    void persist({ routes });
+    void persist(snapshot, { routes });
   };
 
   const removeRoute = (index: number) => {
-    const target = tunnel.routes[index]!;
-    const routes = tunnel.routes.filter((_, i) => i !== index);
+    const target = snapshot.routes[index]!;
+    const routes = snapshot.routes.filter((_, i) => i !== index);
     const stillUsed = routes.some((r) => r.hostname === target.hostname);
-    void persist({ routes, keepDns: !stillUsed && !removeDns ? [target.hostname] : [] });
+    void persist(snapshot, { routes, keepDns: !stillUsed && !removeDns ? [target.hostname] : [] });
   };
 
-  const removingRoute = removing !== null ? tunnel.routes[removing] : null;
-  const removingShared = removingRoute ? tunnel.routes.filter((r) => r.hostname === removingRoute.hostname).length > 1 : false;
+  const removingRoute = removing !== null ? snapshot.routes[removing] : null;
+  const removingShared = removingRoute ? snapshot.routes.filter((r) => r.hostname === removingRoute.hostname).length > 1 : false;
   const versionConflict = error instanceof ApiError && error.code === 'CONFIG_VERSION_CONFLICT';
 
   return (
@@ -78,7 +86,7 @@ export function RoutesTab({ tunnel, onReload }: { tunnel: TunnelDetail; onReload
 
       {editable && (
         <div className="flex justify-end">
-          <Button variant="primary" icon={<PlusIcon />} onClick={() => { setEditing(null); setFormOpen(true); }}>
+          <Button variant="primary" icon={<PlusIcon />} onClick={() => openWith(() => { setEditing(null); setFormOpen(true); })}>
             {t('routes.add')}
           </Button>
         </div>
@@ -116,13 +124,13 @@ export function RoutesTab({ tunnel, onReload }: { tunnel: TunnelDetail; onReload
                     <Table.Cell>
                       <div className="flex justify-end gap-1">
                         <Button size="sm" variant="ghost" shape="square" icon={<ArrowUpIcon />} aria-label={t('routes.moveUp')}
-                          disabled={i === 0 || save.isPending} onClick={() => void persist({ routes: moveRoute(tunnel.routes, i, -1) })} />
+                          disabled={i === 0 || save.isPending} onClick={() => void persist(current(), { routes: moveRoute(tunnel.routes, i, -1) })} />
                         <Button size="sm" variant="ghost" shape="square" icon={<ArrowDownIcon />} aria-label={t('routes.moveDown')}
-                          disabled={i === tunnel.routes.length - 1 || save.isPending} onClick={() => void persist({ routes: moveRoute(tunnel.routes, i, 1) })} />
+                          disabled={i === tunnel.routes.length - 1 || save.isPending} onClick={() => void persist(current(), { routes: moveRoute(tunnel.routes, i, 1) })} />
                         <Button size="sm" variant="ghost" shape="square" icon={<PencilSimpleIcon />} aria-label={t('common.edit')}
-                          onClick={() => { setEditing(i); setFormOpen(true); }} />
+                          onClick={() => openWith(() => { setEditing(i); setFormOpen(true); })} />
                         <Button size="sm" variant="ghost" shape="square" icon={<TrashIcon />} aria-label={t('routes.removeTitle', { hostname: r.hostname })}
-                          onClick={() => { setRemoveDns(true); setRemoving(i); }} />
+                          onClick={() => openWith(() => { setRemoveDns(true); setRemoving(i); })} />
                       </div>
                     </Table.Cell>
                   )}
@@ -146,7 +154,7 @@ export function RoutesTab({ tunnel, onReload }: { tunnel: TunnelDetail; onReload
         open={formOpen}
         onOpenChange={setFormOpen}
         zones={zones}
-        initial={editing !== null ? (tunnel.routes[editing] ?? null) : null}
+        initial={editing !== null ? (snapshot.routes[editing] ?? null) : null}
         saving={save.isPending}
         onSubmit={onSubmitRoute}
       />
@@ -160,7 +168,7 @@ export function RoutesTab({ tunnel, onReload }: { tunnel: TunnelDetail; onReload
             </Dialog.Description>
             <div className="flex justify-end gap-2">
               <Dialog.Close render={(p) => <Button {...p}>{t('common.cancel')}</Button>} />
-              <Button variant="destructive" loading={save.isPending} onClick={() => conflict && void persist(conflict.pending, conflict.hostnames)}>
+              <Button variant="destructive" loading={save.isPending} onClick={() => conflict && void persist(conflict.base, conflict.pending, conflict.hostnames)}>
                 {t('routes.overwrite')}
               </Button>
             </div>
