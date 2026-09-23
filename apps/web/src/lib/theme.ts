@@ -2,7 +2,7 @@ export type Theme = 'light' | 'dark' | 'system';
 
 export function getStoredTheme(): Theme {
   try {
-    return (localStorage.getItem('tm.theme') as Theme | null) ?? 'system';
+    return (localStorage.getItem('tm.theme') as Theme | null) ?? 'light';
   } catch {
     return 'system';
   }
