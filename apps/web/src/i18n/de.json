@@ -208,7 +208,9 @@
     "notHereBanner": "Dieser Tunnel existiert in Ihrem Konto, läuft aber nicht auf diesem Host.",
     "localConfigBanner": "Dieser Tunnel verwendet eine lokale Konfigurationsdatei und kann hier nur angezeigt werden.",
     "tunnelId": "Tunnel-ID",
-    "metricsPort": "Metriken-Port"
+    "metricsPort": "Metriken-Port",
+    "details": "Details",
+    "createdAt": "Erstellt am"
   },
   "routes": {
     "empty": "Noch keine öffentlichen Hostnamen",

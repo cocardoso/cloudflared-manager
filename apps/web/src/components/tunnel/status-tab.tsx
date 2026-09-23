@@ -1,6 +1,7 @@
-import { ChartPalette, ClipboardText, Grid, LayerCard, Table, Text, TimeseriesChart } from '@cloudflare/kumo';
+import { ChartPalette, ClipboardText, LayerCard, Table, Text, TimeseriesChart } from '@cloudflare/kumo';
 import type { TunnelDetail } from '@tm/shared';
 import * as echarts from 'echarts';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTunnelMetrics } from '../../api/hooks';
 import { formatDateTime } from '../../lib/format';
@@ -12,19 +13,29 @@ export function StatusTab({ tunnel }: { tunnel: TunnelDetail }) {
   const metrics = useTunnelMetrics(tunnel.id);
   const points = metrics.data?.points ?? [];
   const version = tunnel.connections[0]?.clientVersion;
+  const details: [string, string, ReactNode][] = [
+    ['id', t('tunnel.tunnelId'), <div className="max-w-md"><ClipboardText text={tunnel.id} /></div>],
+    ['account', t('dashboard.account'), <Text>{tunnel.account.name || '—'}</Text>],
+    ['version', t('tunnel.version'), <Text variant="mono">{version || '—'}</Text>],
+    ['created', t('tunnel.createdAt'), <Text>{tunnel.createdAt ? formatDateTime(tunnel.createdAt, i18n.resolvedLanguage ?? 'en') : '—'}</Text>],
+  ];
 
   return (
     <div className="flex flex-col gap-6">
-      <Grid variant="2up" gap="base">
-        <LayerCard>
-          <LayerCard.Secondary>{t('tunnel.tunnelId')}</LayerCard.Secondary>
-          <LayerCard.Primary><ClipboardText text={tunnel.id} /></LayerCard.Primary>
-        </LayerCard>
-        <LayerCard>
-          <LayerCard.Secondary>{t('tunnel.version')}</LayerCard.Secondary>
-          <LayerCard.Primary><Text variant="mono">{version || '—'}</Text></LayerCard.Primary>
-        </LayerCard>
-      </Grid>
+      <LayerCard>
+        <LayerCard.Secondary>{t('tunnel.details')}</LayerCard.Secondary>
+        <LayerCard.Primary>
+          {/* Label/value rows share one grid so every value lines up, whatever its height. */}
+          <dl className="grid grid-cols-1 items-center gap-x-6 gap-y-3 sm:grid-cols-[max-content_1fr]">
+            {details.map(([key, label, value]) => (
+              <div key={key} data-detail={key} className="contents">
+                <dt><Text variant="secondary" size="sm">{label}</Text></dt>
+                <dd className="min-w-0">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </LayerCard.Primary>
+      </LayerCard>
 
       <LayerCard className="overflow-x-auto p-0">
         <LayerCard.Secondary className="px-4 py-3">{t('tunnel.connectionsTitle')}</LayerCard.Secondary>
