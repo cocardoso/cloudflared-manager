@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import { useLogout, useMe } from '../api/hooks';
 import { LANGUAGES, setLanguage } from '../i18n';
+import { Disclaimer } from './disclaimer';
 
 export function AppShell() {
   const { t, i18n } = useTranslation();
@@ -81,6 +82,7 @@ export function AppShell() {
         <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
           <Outlet />
         </div>
+        <Disclaimer className="mx-auto mt-auto w-full max-w-6xl px-4 pb-6 sm:px-8" />
       </main>
     </Sidebar.Provider>
   );

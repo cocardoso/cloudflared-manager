@@ -16,6 +16,14 @@ beforeEach(async () => {
 });
 
 describe('AppShell', () => {
+  it('says the app is not a Cloudflare product', async () => {
+    mockApi({
+      'GET /api/auth/me': () => json({ username: 'admin' }),
+      'GET /api/system/cloudflared': () => json({ installed: '2026.9.1', latest: '2026.9.1', updateAvailable: false, canSelfUpdate: true }),
+    });
+    renderWithProviders(<AppShell />);
+    expect(await screen.findByText(/not affiliated with, endorsed or supported by Cloudflare, Inc\./)).toBeTruthy();
+  });
   it('shows progress while logging out', async () => {
     mockApi({
       'GET /api/auth/me': () => json({ username: 'admin' }),

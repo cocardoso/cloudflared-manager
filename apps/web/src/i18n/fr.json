@@ -1,7 +1,8 @@
 {
   "app": {
     "name": "Cloudflared Manager",
-    "tagline": "Tunnels pour votre homelab"
+    "tagline": "Tunnels pour votre homelab",
+    "disclaimer": "Cloudflared Manager est un projet indépendant, ni affilié à Cloudflare, Inc., ni approuvé ou pris en charge par elle. Cloudflare, le logo Cloudflare et Cloudflare Tunnel sont des marques de Cloudflare, Inc."
   },
   "nav": {
     "dashboard": "Tableau de bord",

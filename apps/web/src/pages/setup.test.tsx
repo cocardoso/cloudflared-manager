@@ -11,6 +11,11 @@ beforeEach(async () => {
 });
 
 describe('SetupPage', () => {
+  it('says the app is not a Cloudflare product', async () => {
+    mockApi({ 'GET /api/setup/status': () => json({ adminCreated: false, cloudflareConnected: false }) });
+    renderWithProviders(<SetupPage />);
+    expect(await screen.findByText(/not affiliated with, endorsed or supported by Cloudflare, Inc\./)).toBeTruthy();
+  });
   it('accepts a short password but shows its strength and the recommendation', async () => {
     const calls = mockApi({
       'GET /api/setup/status': () => json({ adminCreated: false, cloudflareConnected: false }),
