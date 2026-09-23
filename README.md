@@ -7,7 +7,7 @@ A web UI to create and run **Cloudflare Tunnels** in your homelab. Deploy it as 
 - Works with **several Cloudflare accounts** behind one token: choose the active ones, see their tunnels in one list filtered by account, and pick the account when creating a tunnel.
 - Per-tunnel **keep-alive**: tunnels recover on their own from crashes, hangs, internet outages and reboots.
 - Live logs, event history, edge connections and a traffic chart.
-- UI in **English and Portuguese (Brazil)**, light and dark themes, built with the Cloudflare dashboard design system ([Kumo](https://www.npmjs.com/package/@cloudflare/kumo)).
+- UI in **English, Portuguese (Brazil), Spanish, French, Italian and German**, light and dark themes, built with the Cloudflare dashboard design system ([Kumo](https://www.npmjs.com/package/@cloudflare/kumo)).
 
 ## Choose how to run it
 
