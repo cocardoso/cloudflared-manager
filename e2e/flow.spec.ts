@@ -27,6 +27,12 @@ test('setup, create tunnel, publish hostname, change settings, delete', async ({
   await expect(page).toHaveURL(/\/tunnels\/[0-9a-f-]+\?tab=routes/);
   await expect(page.getByRole('heading', { name: 'home' })).toBeVisible();
 
+  // Breadcrumb goes back to the list, and the row leads back to the tunnel
+  await page.getByRole('navigation', { name: 'breadcrumb' }).getByRole('link', { name: 'Tunnels' }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await page.getByRole('link', { name: 'home' }).click();
+  await expect(page.getByRole('heading', { name: 'home' })).toBeVisible();
+
   // Publish a hostname
   await page.getByRole('button', { name: 'Add public hostname' }).click();
   const dialog = page.getByRole('dialog');
