@@ -26,7 +26,7 @@ export function StatusTab({ tunnel }: { tunnel: TunnelDetail }) {
         </LayerCard>
       </Grid>
 
-      <LayerCard className="p-0">
+      <LayerCard className="overflow-x-auto p-0">
         <LayerCard.Secondary className="px-4 py-3">{t('tunnel.connectionsTitle')}</LayerCard.Secondary>
         {tunnel.connections.length === 0 ? (
           <div className="p-4"><Text variant="secondary">{t('tunnel.noConnections')}</Text></div>

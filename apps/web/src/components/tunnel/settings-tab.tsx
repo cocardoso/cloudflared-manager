@@ -107,6 +107,7 @@ export function SettingsTab({ tunnel }: { tunnel: TunnelDetail }) {
             />
             <div className="grid gap-4 sm:grid-cols-2">
               <Select
+                className="w-full"
                 label={t('tunnel.logLevel')}
                 hideLabel={false}
                 value={logLevel}
@@ -114,6 +115,7 @@ export function SettingsTab({ tunnel }: { tunnel: TunnelDetail }) {
                 items={{ debug: 'debug', info: 'info', warn: 'warn', error: 'error', fatal: 'fatal' }}
               />
               <Select
+                className="w-full"
                 label={t('tunnel.protocol')}
                 hideLabel={false}
                 value={protocol}

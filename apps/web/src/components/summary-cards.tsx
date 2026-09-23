@@ -1,4 +1,4 @@
-import { Grid, LayerCard, Text } from '@cloudflare/kumo';
+import { LayerCard, Text } from '@cloudflare/kumo';
 import type { TunnelSummary } from '@tm/shared';
 import { useTranslation } from 'react-i18next';
 
@@ -19,7 +19,7 @@ export function summarize(tunnels: TunnelSummary[]) {
 const CARDS = [
   { key: 'healthy', dot: 'bg-kumo-success' },
   { key: 'degraded', dot: 'bg-kumo-warning' },
-  { key: 'stopped', dot: 'bg-kumo-inactive' },
+  { key: 'stopped', dot: 'bg-current text-kumo-subtle' },
   { key: 'failing', dot: 'bg-kumo-danger' },
 ] as const;
 
@@ -27,9 +27,9 @@ export function SummaryCards({ tunnels }: { tunnels: TunnelSummary[] }) {
   const { t } = useTranslation();
   const s = summarize(tunnels);
   return (
-    <Grid variant="4up" gap="base">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
       {CARDS.map((c) => (
-        <LayerCard key={c.key}>
+        <LayerCard key={c.key} className="h-full">
           <LayerCard.Primary>
             <div className="flex flex-col gap-1 p-1">
               <div className="flex items-center gap-2">
@@ -41,6 +41,6 @@ export function SummaryCards({ tunnels }: { tunnels: TunnelSummary[] }) {
           </LayerCard.Primary>
         </LayerCard>
       ))}
-    </Grid>
+    </div>
   );
 }

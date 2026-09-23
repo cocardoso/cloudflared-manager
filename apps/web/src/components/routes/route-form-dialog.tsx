@@ -62,6 +62,7 @@ export function RouteFormDialog({ open, onOpenChange, zones, initial, saving, on
           <div className="grid gap-3 sm:grid-cols-[1fr_1fr]">
             <Input label={t('routes.subdomain')} value={v.subdomain} onChange={(e) => set('subdomain', e.target.value)} placeholder="app" autoFocus />
             <Select
+              className="w-full"
               label={t('routes.domain')}
               hideLabel={false}
               value={v.zone}
@@ -84,6 +85,7 @@ export function RouteFormDialog({ open, onOpenChange, zones, initial, saving, on
 
           <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
             <Select
+              className="w-full"
               label={t('routes.type')}
               hideLabel={false}
               value={v.type}

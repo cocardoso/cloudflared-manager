@@ -180,4 +180,14 @@ describe('static web', () => {
     const h = await setupAdmin();
     expect((await app.inject({ url: '/api/nope', headers: h })).statusCode).toBe(404);
   });
+  it('returns 404 for missing static assets instead of the SPA shell', async () => {
+    const web = join(dir, 'web');
+    mkdirSync(web);
+    writeFileSync(join(web, 'index.html'), '<div id="root"></div>');
+    await app.close();
+    app = await makeApp({ WEB_DIST: web });
+    const r = await app.inject('/assets/index-deadbeef.js');
+    expect(r.statusCode).toBe(404);
+    expect(r.body).not.toContain('id="root"');
+  });
 });

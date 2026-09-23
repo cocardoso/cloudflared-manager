@@ -69,7 +69,7 @@ export function DashboardPage() {
               onChange={(e) => setQuery(e.target.value)}
               className="w-full"
             />
-            <LayerCard className="p-0">
+            <LayerCard className="overflow-x-auto p-0">
               {filtered.length ? (
                 <TunnelTable tunnels={filtered} />
               ) : (

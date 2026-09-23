@@ -279,5 +279,10 @@
     "watchdog-failing": "Watchdog gave up",
     "no-connectivity": "No internet",
     "cloudflared-updated": "cloudflared updated"
+  },
+  "eventDetail": {
+    "routes": "{{added}} added, {{removed}} removed",
+    "attempt": "Attempt {{n}} of {{max}}",
+    "settings": "Settings updated"
   }
 }

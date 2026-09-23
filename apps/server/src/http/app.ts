@@ -54,7 +54,12 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
   const webDist = ctx.config.webDist;
   if (webDist) await app.register(fastifyStatic, { root: webDist, wildcard: false });
   app.setNotFoundHandler((req, reply) => {
-    if (!webDist || req.url.startsWith('/api/')) return reply.code(404).send({ code: 'VALIDATION_ERROR', message: 'Not found' });
+    const path = req.url.split('?')[0]!;
+    // Only client-side routes get the SPA shell; a missing file (e.g. /assets/x.js) is a real 404.
+    const isFile = /\.[a-z0-9]+$/i.test(path);
+    if (!webDist || path.startsWith('/api/') || isFile || req.method !== 'GET') {
+      return reply.code(404).send({ code: 'VALIDATION_ERROR', message: 'Not found' });
+    }
     return reply.sendFile('index.html');
   });
   return app;

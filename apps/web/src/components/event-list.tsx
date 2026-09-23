@@ -1,6 +1,7 @@
 import { Text } from '@cloudflare/kumo';
 import type { EventType, TunnelEvent } from '@tm/shared';
 import { useTranslation } from 'react-i18next';
+import { eventDetail } from '../lib/event-detail';
 import { formatDateTime, formatRelative } from '../lib/format';
 
 const DOT: Partial<Record<EventType, string>> = {
@@ -15,7 +16,9 @@ export function EventList({ events, names }: { events: TunnelEvent[]; names?: Re
   if (!events.length) return <Text variant="secondary">{t('dashboard.noEvents')}</Text>;
   return (
     <ol className="flex flex-col">
-      {events.map((e) => (
+      {events.map((e) => {
+        const detail = eventDetail(e, t);
+        return (
         <li key={e.id} className="flex items-start gap-3 border-b border-kumo-hairline py-2.5 last:border-0">
           <span className={`mt-1.5 size-2 shrink-0 rounded-full ${DOT[e.type] ?? 'bg-kumo-info'}`} />
           <div className="flex min-w-0 flex-1 flex-col">
@@ -23,13 +26,14 @@ export function EventList({ events, names }: { events: TunnelEvent[]; names?: Re
               <Text bold size="sm">{t(`events.${e.type}`)}</Text>
               {names && e.tunnelId && names[e.tunnelId] && <Text variant="secondary" size="sm">{names[e.tunnelId]}</Text>}
             </div>
-            <Text variant="secondary" size="sm">{e.message}</Text>
+            {detail && <Text variant="secondary" size="sm">{detail}</Text>}
           </div>
           <time className="shrink-0 text-xs text-kumo-subtle" dateTime={e.createdAt} title={formatDateTime(e.createdAt, lng)}>
             {formatRelative(e.createdAt, lng)}
           </time>
         </li>
-      ))}
+        );
+      })}
     </ol>
   );
 }

@@ -64,6 +64,7 @@ export function ConnectCloudflareForm({ onConnected }: { onConnected?: (s: Cloud
       <SensitiveInput label={t('setup.token')} value={token} onValueChange={setToken} autoComplete="off" />
       {accounts && (
         <Select
+          className="w-full"
           label={t('setup.chooseAccount')}
           hideLabel={false}
           value={accountId}

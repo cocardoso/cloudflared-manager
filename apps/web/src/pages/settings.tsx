@@ -110,6 +110,7 @@ function AppearanceSection() {
     <Section title={t('settings.appearance')}>
       <div className="grid max-w-md gap-4 sm:grid-cols-2">
         <Select
+          className="w-full"
           label={t('nav.language')}
           hideLabel={false}
           value={i18n.resolvedLanguage ?? 'en'}
@@ -117,6 +118,7 @@ function AppearanceSection() {
           items={Object.fromEntries(LANGUAGES.map((l) => [l.value, l.label]))}
         />
         <Select
+          className="w-full"
           label={t('settings.theme')}
           hideLabel={false}
           value={theme}

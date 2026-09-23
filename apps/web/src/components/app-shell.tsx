@@ -1,5 +1,5 @@
-import { CloudflareLogo, Select, Sidebar, Text } from '@cloudflare/kumo';
-import { GearIcon, SignOutIcon, TreeStructureIcon } from '@phosphor-icons/react';
+import { Button, CloudflareLogo, DropdownMenu, Sidebar, Text, Tooltip } from '@cloudflare/kumo';
+import { GearIcon, GlobeIcon, SignOutIcon, TreeStructureIcon } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import { useLogout, useMe } from '../api/hooks';
@@ -14,7 +14,7 @@ export function AppShell() {
   const onTunnels = loc.pathname === '/' || loc.pathname.startsWith('/tunnels');
 
   return (
-    <Sidebar.Provider defaultOpen className="min-h-screen">
+    <Sidebar.Provider defaultOpen className="h-svh">
       <Sidebar>
         <Sidebar.Header>
           <div className="flex items-center gap-2 px-2 py-1">
@@ -38,30 +38,45 @@ export function AppShell() {
           </Sidebar.Group>
         </Sidebar.Content>
         <Sidebar.Footer>
-          <div className="flex flex-col gap-2 px-2 pb-2">
-            <Select
-              label={t('nav.language')}
-              hideLabel
-              value={i18n.resolvedLanguage ?? 'en'}
-              onValueChange={(v) => void setLanguage(String(v ?? 'en'))}
-              items={Object.fromEntries(LANGUAGES.map((l) => [l.value, l.label]))}
-            />
-            <Sidebar.Menu>
-              <Sidebar.MenuButton
-                icon={SignOutIcon}
-                tooltip={t('nav.logout')}
+          <div className="flex items-center justify-between gap-2 px-2 pb-2">
+            <DropdownMenu>
+              <DropdownMenu.Trigger
+                render={
+                  <Button variant="ghost" size="sm" icon={<GlobeIcon />} aria-label={t('nav.language')}>
+                    {LANGUAGES.find((l) => l.value === i18n.resolvedLanguage)?.label ?? 'English'}
+                  </Button>
+                }
+              />
+              <DropdownMenu.Content>
+                {LANGUAGES.map((l) => (
+                  <DropdownMenu.Item key={l.value} onClick={() => void setLanguage(l.value)}>
+                    {l.label}
+                  </DropdownMenu.Item>
+                ))}
+              </DropdownMenu.Content>
+            </DropdownMenu>
+            <Tooltip content={me.data ? `${t('nav.logout')} (${me.data.username})` : t('nav.logout')}>
+              <Button
+                variant="ghost"
+                size="sm"
+                shape="square"
+                icon={<SignOutIcon />}
+                aria-label={t('nav.logout')}
                 onClick={async () => {
                   await logout.mutateAsync();
                   nav('/login');
                 }}
-              >
-                {me.data ? `${t('nav.logout')} (${me.data.username})` : t('nav.logout')}
-              </Sidebar.MenuButton>
-            </Sidebar.Menu>
+              />
+            </Tooltip>
           </div>
         </Sidebar.Footer>
       </Sidebar>
-      <main className="min-w-0 flex-1">
+      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+        <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-kumo-line bg-kumo-canvas px-4 py-2 md:hidden">
+          <Sidebar.Trigger />
+          <CloudflareLogo variant="glyph" className="h-5 w-auto" />
+          <Text bold>{t('app.name')}</Text>
+        </div>
         <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
           <Outlet />
         </div>

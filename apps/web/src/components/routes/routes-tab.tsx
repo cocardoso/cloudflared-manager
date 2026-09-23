@@ -91,7 +91,7 @@ export function RoutesTab({ tunnel, onReload }: { tunnel: TunnelDetail; onReload
           </LayerCard.Primary>
         </LayerCard>
       ) : (
-        <LayerCard className="p-0">
+        <LayerCard className="overflow-x-auto p-0">
           <Table>
             <Table.Header>
               <Table.Row>
