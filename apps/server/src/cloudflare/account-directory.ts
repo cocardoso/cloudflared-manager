@@ -31,7 +31,7 @@ export class AccountDirectory {
   }
 
   /** Every account the token reaches, active or not. */
-  listAll(): Promise<AccountInfo[]> {
+  async listAll(): Promise<AccountInfo[]> {
     const c = this.client();
     const e = this.cache;
     const fresh = e && e.token === c.token && this.now() - e.at <= (e.failed ? this.failureTtlMs : this.ttlMs);

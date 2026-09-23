@@ -86,4 +86,12 @@ describe('AccountDirectory', () => {
     const d = new AccountDirectory(() => new CfClient({ token, baseUrl: cf.baseUrl }), { onDiscovered: () => { throw new Error('disk full'); } });
     expect(await d.list()).toHaveLength(1);
   });
+  it('reports a missing token as a rejected promise, never a synchronous throw', async () => {
+    const d = new AccountDirectory(() => {
+      throw new Error('not connected');
+    });
+    let p: Promise<unknown> | undefined;
+    expect(() => (p = d.listAll())).not.toThrow();
+    await expect(p).rejects.toThrow('not connected');
+  });
 });
