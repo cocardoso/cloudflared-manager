@@ -215,7 +215,7 @@ export class TunnelService {
     this.known.set(t.id, account.id);
     await this.installAndStart(t.id, account.id);
     this.d.onAccountUsed?.(account.id);
-    this.d.events.add(t.id, 'created', `Tunnel "${name}" created`);
+    this.d.events.add(t.id, 'created', `Tunnel "${name}" created`, name);
     return this.summarize(await api.getTunnel(t.id), this.d.tunnels.get(t.id), 0, ref(account));
   }
 
@@ -224,7 +224,7 @@ export class TunnelService {
     const t = await this.d.api(account.id).getTunnel(id);
     if (t.config_src !== 'cloudflare') throw new AppError('TUNNEL_NOT_REMOTE', 'Only remotely-managed tunnels can be adopted', 400);
     await this.installAndStart(id, account.id);
-    this.d.events.add(id, 'adopted', `Tunnel "${t.name}" adopted`);
+    this.d.events.add(id, 'adopted', `Tunnel "${t.name}" adopted`, t.name);
     return this.get(id);
   }
 
@@ -251,7 +251,7 @@ export class TunnelService {
       await this.d.backend.updateEnv(id, this.envFor(this.d.tunnels.get(id)!, token));
       if ((await this.d.backend.status(id)).state === 'active') await this.d.backend.restart(id);
     }
-    this.d.events.add(id, 'config-changed', 'Tunnel settings updated');
+    this.d.events.add(id, 'config-changed', 'Tunnel settings updated', patch.name);
     return this.get(id);
   }
 

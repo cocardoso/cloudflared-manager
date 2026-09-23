@@ -42,7 +42,10 @@ export type EventType =
   | 'cloudflared-updated';
 
 export interface TunnelEvent {
-  id: number; tunnelId: string | null; type: EventType; message: string; createdAt: string;
+  id: number; tunnelId: string | null;
+  /** Name of the tunnel when the event happened; kept after the tunnel is deleted. */
+  tunnelName: string | null;
+  type: EventType; message: string; createdAt: string;
 }
 
 export interface Zone { id: string; name: string }

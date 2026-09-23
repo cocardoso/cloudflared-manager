@@ -188,6 +188,11 @@ describe('delete', () => {
     expect(env.cf.state.tunnels.get(t.id)!.tunnel.deleted_at).not.toBeNull();
     expect(env.tunnels.get(t.id)).toBeNull();
   });
+  it('keeps the tunnel name on its deletion event', async () => {
+    const t = await env.service.create('home');
+    await env.service.delete(t.id);
+    expect(env.events.list({ tunnelId: t.id, limit: 1 })[0]).toMatchObject({ type: 'deleted', tunnelName: 'home' });
+  });
   it('is idempotent when parts are already gone', async () => {
     const t = await env.service.create('home');
     await env.service.updateRoutes(t.id, upd(0, [route('ha.example.com')]));
