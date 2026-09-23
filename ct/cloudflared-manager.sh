@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 cesar
 # License: MIT
-# Source: https://github.com/__GH_REPO__
+# Source: https://github.com/cocardoso/cloudflared-proxmox
 
-GH_REPO="${TM_GH_REPO:-__GH_REPO__}"
+GH_REPO="${TM_GH_REPO:-cocardoso/cloudflared-proxmox}"
 # The community-scripts engine is pinned so upstream changes cannot break this script.
 CORE_COMMIT="${TM_CORE_COMMIT:-34c3105f51f7d24505a7b4801babbf2aa7bca407}"
 export _CS_DEFAULT_URL="https://raw.githubusercontent.com/${GH_REPO}/main"

@@ -13,7 +13,7 @@ Script no estilo [community-scripts](https://community-scripts.org/scripts/cloud
 Na shell do **host** Proxmox:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/__GH_REPO__/main/ct/cloudflared-manager.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/cocardoso/cloudflared-proxmox/main/ct/cloudflared-manager.sh)"
 ```
 
 Padrões do container (ajustáveis nos menus do instalador): Debian 13, 1 vCPU, 1 GB de RAM, 4 GB de disco, não-privilegiado, x86-64 e ARM64.
