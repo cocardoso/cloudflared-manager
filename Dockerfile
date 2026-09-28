@@ -11,10 +11,10 @@ RUN pnpm install --frozen-lockfile && pnpm build
 
 FROM node:24-bookworm-slim
 ARG TARGETARCH
-ARG CLOUDFLARED_VERSION=2026.9.1
+ARG CLOUDFLARED_VERSION=2026.9.3
 # SHA-256 of the release binaries, as published by Cloudflare (kept in sync by the cloudflared-bump workflow).
-ARG CLOUDFLARED_SHA256_AMD64=03f1f25d1cc93b9ad6c60569d44060bc4f17ed97075760ed8cfca4b12dcd68cc
-ARG CLOUDFLARED_SHA256_ARM64=3d97437c71848bd8df68041e12436b484a661d95073ea1937f01a845ce88faa3
+ARG CLOUDFLARED_SHA256_AMD64=77e26d8d900e0b8469f416239d14b5f296525fdf79fee6f511ef55609e3fbac2
+ARG CLOUDFLARED_SHA256_ARM64=aaeb2d7d0da3614634c7e03ab13487a1522c2e79165ed2929cfe23d5e95b326d
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl procps tini \
  && curl -fsSL -o /usr/local/bin/cloudflared \
