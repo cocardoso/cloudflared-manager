@@ -9,6 +9,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 jobs:
   bump:
@@ -36,6 +37,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
       - if: steps.versions.outputs.latest != steps.versions.outputs.current
+        id: pr
         uses: peter-evans/create-pull-request@v7
         with:
           branch: chore/cloudflared-${{ steps.versions.outputs.latest }}
@@ -44,3 +46,8 @@ jobs:
           body: |
             cloudflared ${{ steps.versions.outputs.latest }} is available (image currently bundles ${{ steps.versions.outputs.current }}).
             Merge, then tag a release to publish a new Docker image.
+      # Its checks attach to the branch head, so they show up on the pull request.
+      - if: steps.pr.outputs.pull-request-head-sha != ''
+        run: gh workflow run ci.yml --ref "chore/cloudflared-${{ steps.versions.outputs.latest }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
